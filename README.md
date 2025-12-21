@@ -1,5 +1,7 @@
 ## turvata
 
+[![Clojars Project](https://img.shields.io/clojars/v/com.sturdystats/turvata.svg)](https://clojars.org/com.sturdystats/turvata)
+
 **Verb** ([Finnish](https://translate.google.com/?sl=fi&tl=en&text=turvata&op=translate)):
 secure, safeguard, ensure, assure, defend, indemnify, insure, cover
 
