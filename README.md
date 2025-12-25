@@ -178,6 +178,12 @@ These notes describe the intended security model and assumptions of `turvata`.
 - Open redirects are prevented
 - Forwarded HTTPS headers should only be trusted behind a proxy
 
+## License
+
+Apache License 2.0
+
+Copyright © Sturdy Statistics
+
 ## Postscript
 
 > **A note to Finnish speakers:**
