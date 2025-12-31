@@ -4,12 +4,13 @@
          ring/ring-jetty-adapter      {:mvn/version "1.14.2"}
 
          metosin/reitit               {:mvn/version "0.9.1"}
-         metosin/muuntaja            {:mvn/version "0.6.11"}
+         metosin/muuntaja             {:mvn/version "0.6.11"}
 
          ring/ring-anti-forgery       {:mvn/version "1.4.0"}
 
          com.sturdystats/turvata      {:local/root "../../turvata"}
-         com.sturdystats/sturdy-fs    {:mvn/version "0.1.2"}}
+         com.sturdystats/sturdy-fs    {:mvn/version "0.1.2"}
+         com.sturdystats/malli-firewall {:mvn/version "0.1.1"}}
 
  :aliases
  {:run {:main-opts ["-m" "example-app.core"]}}}

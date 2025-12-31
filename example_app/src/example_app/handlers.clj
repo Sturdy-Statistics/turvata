@@ -6,17 +6,10 @@
    [example-app.auth :as a]
    [example-app.views :as views]
 
-   [turvata.ring.handlers :as auth]))
+   [turvata.ring.handlers :as auth]
+   [turvata.schema :as s]
 
-(defn- safe-next
-  "Return a safe internal redirect target or nil.
-   Allows only absolute paths on this host (e.g., \"/admin\"),
-   disallows protocol-relative (\"//...\") and external URLs."
-  [s]
-  (when (and (string? s)
-             (string/starts-with? s "/")
-             (not (string/starts-with? s "//")))
-    s))
+   [sturdy.malli-firewall.web :refer [with-schema]]))
 
 ;;; LoginRequest
 (def login-post-handler auth/login-handler)
@@ -33,19 +26,26 @@
   [request]
   (resp/response (views/confirm-logout request)))
 
-;;; LoginRequest
+(def LoginGetRequest
+  [:map {:closed false}
+   [:next     {:optional true} s/RelativeURI]
+   [:error    {:optional true} string?]
+
+   [:__anti-forgery-token {:optional true} string?]])
+
 (defn login-get-handler
   [request]
   ;; Read `next` from params
-  (let [params   (:params request)
-        next-raw (:next params)
-        next     (some-> next-raw safe-next)
-        redirect-to (or next (a/post-login-redirect))]
+  (with-schema LoginGetRequest request
 
-    (if (auth/logged-in?-handler request)
-      (resp/redirect redirect-to 303)
-      (resp/response (views/login-page
-                      (assoc request :next next))))))
+    (let [params   (:params request)
+          next (:next params)
+          redirect-to (or next (a/post-login-redirect))]
+
+      (if (auth/logged-in?-handler request)
+        (resp/redirect redirect-to 303)
+        (resp/response (views/login-page
+                        (assoc request :next next)))))))
 
 (defn admin-home-handler [request]
   ;; request has :user-id due to auth/require-web-auth

@@ -8,18 +8,9 @@
    [turvata.session :as sess]
    [turvata.keys :as keys]
    [turvata.ring.middleware :refer [ms->s]]
+   [turvata.schema :as s]
+   [sturdy.malli-firewall.web :refer [with-schema]]
    [taoensso.truss :refer [have]]))
-
-(defn- safe-next [s]
-  (when (and (string? s)
-             (.startsWith s "/")
-             (not (.startsWith s "//")))
-    s))
-
-(defn- pget
-  "Fetch param by string or keyword key (works with/without keyword-params mw)."
-  [params k]
-  (or (get params k) (get params (name (have keyword? k)))))
 
 (defn logged-in?-handler
   "Return the current session auth map (e.g. {:user-id ...}) if the request is
@@ -41,46 +32,46 @@
   back to :post-login-redirect."
   [request]
   (rt/require-runtime)
-  (let [cookie        (rt/settings [:cookie-name])
-        ttl-ms        (rt/settings [:session-ttl-ms])
-        post-login    (rt/settings [:post-login-redirect])
-        params        (:params request) ;; may be string or keyword keys
-        username      (some-> (pget params :username) str)
-        token         (some-> (pget params :token) str)
-        cookie-token  (get-in request [:cookies cookie :value]) ;likely nil
-        next-raw      (pget params :next)
-        redirect-to   (or (safe-next next-raw) post-login)
-        ;; already-auth’d?
-        already       (when cookie-token
-                        (authenticate-browser-token cookie-token))
-        ;; catalog lookup
-        user-id       (when token (cat/lookup-user-id (rt/catalog) token))
-        ok?           (and user-id username (= username (str user-id)))]
+  (with-schema s/TurvataLogin request
+    (let [{:keys [username token next]} (:params request) ;; Guaranteed Keywords!
 
-    (cond
-      ;; Already logged in → 200 JSON
-      already
-      (resp/response {:message "Already logged in"})
+          cookie        (rt/settings [:cookie-name])
+          ttl-ms        (rt/settings [:session-ttl-ms])
+          post-login    (rt/settings [:post-login-redirect])
+          redirect-to   (or next post-login)
 
-      ;; Valid credentials → create session, set cookie, redirect
-      ok?
-      (let [session-token  (-> (keys/generate-token) :token)
-            expires-at     (+ (sess/now-ms) ttl-ms)
-            max-age        (ms->s (have pos? ttl-ms))
-            cookie-attrs   (assoc (rt/cookie-attrs request) :max-age max-age)]
-        (sess/put-entry! (rt/store) session-token {:user-id username :expires-at expires-at})
-        (-> (resp/redirect redirect-to 303) ;; See Other after POST
-            (resp/set-cookie cookie session-token cookie-attrs)
-            (resp/header "Cache-Control" "no-store")))
+          ;; already auth'd?
+          cookie-token  (get-in request [:cookies cookie :value])
+          already       (when cookie-token
+                          (authenticate-browser-token cookie-token))
+          ;; catalog lookup
+          user-id       (when token (cat/lookup-user-id (rt/catalog) token))
+          ok?           (and user-id username (= username (str user-id)))]
 
-      ;; Bad credentials → bounce back to login with error + next
-      :else
-      (let [login (have string? (rt/settings [:login-url]))
-            loc   (str login
-                       "?error=bad_credentials"
-                       (when redirect-to (str "&next=" (rcodec/url-encode redirect-to))))]
-        (-> (resp/redirect loc 303)
-            (resp/header "Cache-Control" "no-store"))))))
+     (cond
+       ;; Already logged in → 200 JSON
+       already
+       (resp/response {:message "Already logged in"})
+
+       ;; Valid credentials → create session, set cookie, redirect
+       ok?
+       (let [session-token  (-> (keys/generate-token) :token)
+             expires-at     (+ (sess/now-ms) ttl-ms)
+             max-age        (ms->s (have pos? ttl-ms))
+             cookie-attrs   (assoc (rt/cookie-attrs request) :max-age max-age)]
+         (sess/put-entry! (rt/store) session-token {:user-id username :expires-at expires-at})
+         (-> (resp/redirect redirect-to 303) ;; See Other after POST
+             (resp/set-cookie cookie session-token cookie-attrs)
+             (resp/header "Cache-Control" "no-store")))
+
+       ;; Bad credentials → bounce back to login with error + next
+       :else
+       (let [login (have string? (rt/settings [:login-url]))
+             loc   (str login
+                        "?error=bad_credentials"
+                        (when redirect-to (str "&next=" (rcodec/url-encode redirect-to))))]
+         (-> (resp/redirect loc 303)
+             (resp/header "Cache-Control" "no-store")))))))
 
 (def ^:private expired-http-date
   ;; RFC 7231 IMF-fixdate, safely in the past
@@ -95,11 +86,12 @@
   "POST handler Clear cookie + session and redirect to a confirmation page."
   [request]
   (rt/require-runtime)
-  (let [cookie   (rt/settings [:cookie-name])
-        redirect (rt/settings [:post-logout-redirect])]
-    (when-let [token (get-in request [:cookies cookie :value])]
-      (sess/delete-entry! (rt/store) token))
-    (let [cookie-settings  (rt/cookie-attrs request)]
-      (-> (resp/redirect redirect 303) ;; See Other after POST
-          (resp/set-cookie cookie "" (clear-attrs cookie-settings))
-          (resp/header "Cache-Control" "no-store")))))
+  (with-schema s/EmptyRequest request
+   (let [cookie   (rt/settings [:cookie-name])
+         redirect (rt/settings [:post-logout-redirect])]
+     (when-let [token (get-in request [:cookies cookie :value])]
+       (sess/delete-entry! (rt/store) token))
+     (let [cookie-settings  (rt/cookie-attrs request)]
+       (-> (resp/redirect redirect 303) ;; See Other after POST
+           (resp/set-cookie cookie "" (clear-attrs cookie-settings))
+           (resp/header "Cache-Control" "no-store"))))))

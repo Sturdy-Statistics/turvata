@@ -4,7 +4,6 @@
    [turvata.runtime :as rt]
    [ring.mock.request :as mock]
    [ring.middleware.params :refer [wrap-params]]
-   [ring.middleware.keyword-params :refer [wrap-keyword-params]]
    [ring.util.codec :as rcodec]          ;; for form encoding
 
    [turvata.catalog :as cat]
@@ -30,7 +29,6 @@
 
 (deftest login-success-sets-cookie-and-redirects
   (let [app      (-> h/login-handler
-                     wrap-keyword-params
                      wrap-params)
         req      (-> (mock/request :post "/auth/login")
                      (mock/header "content-type" "application/x-www-form-urlencoded")
@@ -46,13 +44,15 @@
 
 (deftest login-bad-credentials-redirects-to-login
   (let [handler h/login-handler
-        resp    (handler (mock/request :post "/auth/login" {"username" "alice" "token" "nope"}))]
+        request (-> (mock/request :post "/auth/login")
+                    (assoc :params {"username" "alice" "token" "nope"}))
+        resp    (handler request)]
+
     (is (= 303 (:status resp)))
     (is (re-find #"/auth/login\?error=bad_credentials" (get-in resp [:headers "Location"])))))
 
 (deftest login-preserves-next-on-success
   (let [app        (-> h/login-handler
-                       wrap-keyword-params
                        wrap-params)
         req        (-> (mock/request :post "/auth/login")
                        (mock/header "content-type" "application/x-www-form-urlencoded")
@@ -71,8 +71,32 @@
         now      (System/currentTimeMillis)]
     ;; seed a valid session cookie
     (sess/put-entry! *store* token {:user-id "alice" :expires-at (+ now 60000)})
-    (let [req  (-> (mock/request :post "/auth/login" {"username" "alice" "token" "good"})
+    (let [req  (-> (mock/request :post "/auth/login")
+                   (assoc :params {"username" "alice" "token" "good"})
                    (assoc :cookies {cookie {:value token}}))
           resp (handler req)]
       (is (= 200 (:status resp)))
       (is (= {:message "Already logged in"} (:body resp))))))
+
+(deftest login-blocks-malicious-redirects
+  (let [handler h/login-handler
+        ;; Malicious next parameter
+        req     (-> (mock/request :post "/auth/login")
+                    (assoc :params {"username" "alice"
+                                    "token"    "good"
+                                    "next"     "https://evil-phishing-site.com"}))
+        resp    (handler req)]
+    ;; The firewall should catch this because https://... isn't a RelativeURI
+    (is (= 400 (:status resp)) "Should block external redirects")
+    (is (get-in resp [:body :details :next]) "Should report error for the 'next' field")))
+
+(deftest login-security-no-keyword-leak
+  (let [handler h/login-handler
+        junk-key (str "attack-" (java.util.UUID/randomUUID))
+        req     (-> (mock/request :post "/auth/login")
+                    (assoc :params {junk-key "val"
+                                    "username" "alice"
+                                    "token" "good"}))
+        _       (handler req)]
+    (is (nil? (find-keyword junk-key))
+        "Unknown keys must never be interned as keywords.")))

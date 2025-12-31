@@ -7,9 +7,6 @@
    [ring.middleware.session.memory :refer [memory-store]]
    [ring.middleware.anti-forgery :refer [wrap-anti-forgery]]
 
-   [ring.middleware.keyword-params :refer [wrap-keyword-params]]
-   [ring.middleware.multipart-params :refer [wrap-multipart-params]]
-
    ;; auth
    [turvata.ring.middleware :as auth]))
 
@@ -20,9 +17,7 @@
 (def web-middleware
   "Middleware for public web routes.  These run AFTER routing.
    Note that these are applied to a request IN ORDER listed"
-  ;; NB wrap-params already baked into reitit config see app.core
-  [wrap-multipart-params
-   wrap-keyword-params])     ; convert string keys to keyword
+  [])
 
 (def login-middleware
   "Middleware for login routes. (which are public).

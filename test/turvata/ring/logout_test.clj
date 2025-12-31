@@ -42,3 +42,12 @@
     ;; still emits a clearing cookie with max-age 0
     (is (= "" (get-in resp [:cookies cookie :value])))
     (is (= 0  (get-in resp [:cookies cookie :max-age])))))
+
+(deftest logout-strips-unwanted-params
+  (let [handler h/logout-handler
+        req     (-> (mock/request :post "/auth/logout")
+                    (assoc :params {"malicious_param" "value"}))
+        resp    (handler req)]
+    ;; If *strip-unknown-keys* is true (default), this should succeed
+    ;; but the param is ignored.
+    (is (= 303 (:status resp)))))
