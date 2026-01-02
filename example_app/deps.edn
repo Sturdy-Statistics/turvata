@@ -10,7 +10,7 @@
 
          com.sturdystats/turvata      {:local/root "../../turvata"}
          com.sturdystats/sturdy-fs    {:mvn/version "0.1.2"}
-         com.sturdystats/malli-firewall {:mvn/version "0.1.1"}}
+         com.sturdystats/malli-firewall {:mvn/version "0.1.2"}}
 
  :aliases
  {:run {:main-opts ["-m" "example-app.core"]}}}

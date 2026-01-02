@@ -3,7 +3,7 @@
          buddy/buddy-core               {:mvn/version "1.12.0-430"}
          com.taoensso/truss             {:mvn/version "2.2.0"}
          com.sturdystats/sturdy-fs      {:mvn/version "0.1.2"}
-         com.sturdystats/malli-firewall {:mvn/version "0.1.1"}}
+         com.sturdystats/malli-firewall {:mvn/version "0.1.2"}}
 
  :aliases {:test
            {:extra-paths ["test" "test-resources"]
