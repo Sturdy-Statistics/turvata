@@ -10,7 +10,7 @@
 ;; Stub catalog: two valid tokens map to two users; everything else is invalid.
 (def catalog
   (reify cat/TokenCatalog
-    (lookup-user-id [_ token]
+    (lookup-user-id [_ token _req]
       (case token
         "good" "alice"
         "xyz"  :bob

@@ -15,11 +15,11 @@
    is at or below 50%. If TTL is non-positive, the token is never refreshed.
 
    Returns nil if the token is missing, unknown, or expired."
-  [token]
+  [token!!]
   (rt/require-runtime)
   (let [now (sess/now-ms)]
     (when-let [{:keys [user-id expires-at]}
-               (and (not-empty token) (sess/get-entry (rt/store) token))]
+               (and (not-empty token!!) (sess/get-entry (rt/store) token!!))]
       (when (> expires-at now)
         (let [ttl       (rt/settings [:session-ttl-ms])
               remaining (- expires-at now)]
@@ -27,7 +27,7 @@
             (if (<= remaining (quot ttl 2))
               ;; refresh
               (let [new-exp (+ now ttl)
-                    touched (sess/touch! (rt/store) token new-exp)]
+                    touched (sess/touch! (rt/store) token!! new-exp)]
                 {:user-id user-id
                  :expires-at (have integer? (:expires-at touched)) ; read back what store wrote
                  :refreshed? true})

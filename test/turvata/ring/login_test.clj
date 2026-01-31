@@ -14,7 +14,7 @@
 
 (def catalog
   (reify cat/TokenCatalog
-    (lookup-user-id [_ token] ({"good" "alice"} token))))
+    (lookup-user-id [_ token _req] ({"good" "alice"} token))))
 
 (use-fixtures :each
   (fn [f]

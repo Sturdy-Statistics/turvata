@@ -26,12 +26,12 @@
   (fn [request]
     (rt/require-runtime)
     (let [auth-header (get-in request [:headers "authorization"])
-          token       (some->> auth-header
+          token!!     (some->> auth-header
                                (re-find bearer-re)
                                second
                                string/trim
                                not-empty)
-          user-id     (when token (c/lookup-user-id (rt/catalog) token))]
+          user-id     (when token!! (c/lookup-user-id (rt/catalog) token!! request))]
       (if-not user-id
         (-> (resp/response {:error "unauthorized"})
             (resp/status 401)
@@ -51,9 +51,9 @@
   (fn [request]
     (rt/require-runtime)
     (let [cookie-name      (have string? (rt/settings [:cookie-name]))
-          token            (get-in request [:cookies cookie-name :value])
+          token!!          (get-in request [:cookies cookie-name :value])
           cookie-settings  (rt/cookie-attrs request)
-          auth             (authenticate-browser-token token)]
+          auth             (authenticate-browser-token token!!)]
 
       (if-let [{:keys [user-id expires-at refreshed?]} auth]
         ;; authenticated path... nil-preserving!
@@ -64,7 +64,7 @@
                   max-age          (ms->s (max 0 remaining))
                   cookie-settings' (assoc cookie-settings :max-age max-age)]
               (-> response
-                  (resp/set-cookie cookie-name token cookie-settings')
+                  (resp/set-cookie cookie-name token!! cookie-settings')
                   (resp/header "Vary" "Cookie")))
             ;; don't change cookie
             response))

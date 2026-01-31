@@ -34,6 +34,7 @@
   (rt/require-runtime)
   (with-schema s/TurvataLogin request
     (let [{:keys [username token next]} (:params request) ;; Guaranteed Keywords!
+          token!!       token
 
           cookie        (rt/settings [:cookie-name])
           ttl-ms        (rt/settings [:session-ttl-ms])
@@ -45,7 +46,7 @@
           already       (when cookie-token
                           (authenticate-browser-token cookie-token))
           ;; catalog lookup
-          user-id       (when token (cat/lookup-user-id (rt/catalog) token))
+          user-id       (when token!! (cat/lookup-user-id (rt/catalog) token!! request))
           ok?           (and user-id username (= username (str user-id)))]
 
      (cond
@@ -55,7 +56,7 @@
 
        ;; Valid credentials → create session, set cookie, redirect
        ok?
-       (let [session-token  (-> (keys/generate-token) :token)
+       (let [session-token  (-> (keys/generate-token) :token!!)
              expires-at     (+ (sess/now-ms) ttl-ms)
              max-age        (ms->s (have pos? ttl-ms))
              cookie-attrs   (assoc (rt/cookie-attrs request) :max-age max-age)]

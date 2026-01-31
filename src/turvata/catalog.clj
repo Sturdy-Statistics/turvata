@@ -4,8 +4,11 @@
    [sturdy.fs :as sfs]))
 
 (defprotocol TokenCatalog
-  (lookup-user-id [this token]
-    "Return user-id (string/keyword) if bearer token is valid, else nil."))
+  (lookup-user-id
+    [this token!!]
+    [this token!! context]
+    "Return user-id (string/keyword) if bearer token is valid.
+     Context is an optional map (e.g. ring request, log data) for auditing."))
 
 (defn hashed-map-catalog
   "Catalog backed by an in-memory map keyed by hashed tokens.
@@ -16,9 +19,12 @@
   Tokens must be high-entropy (random), not user-chosen."
   [hashed->user-id]
   (reify TokenCatalog
-    (lookup-user-id [_ token]
-      (when (string? token)
-        (get hashed->user-id (k/hash-token token))))))
+    (lookup-user-id [_ token!!]
+      (when (string? token!!)
+        (get hashed->user-id (k/hash-token token!!))))
+
+    (lookup-user-id [this token!! _context]
+      (lookup-user-id this token!!))))
 
 (defn plain-map-catalog
   "Catalog backed by an in-memory map keyed by raw tokens (useful in tests).
@@ -26,24 +32,33 @@
   Provide {<raw-token> -> <user-id>}."
   [token->user-id]
   (reify TokenCatalog
-    (lookup-user-id [_ token]
-      (when (string? token)
-        (get token->user-id token)))))
+    (lookup-user-id [_ token!!]
+      (when (string? token!!)
+        (get token->user-id token!!)))
+
+    (lookup-user-id [this token!! _context]
+      (lookup-user-id this token!!))))
 
 (defn fn-catalog
-  "Wrap an arbitrary (fn [token] -> user-id|nil)."
+  "Wrap an arbitrary (fn [token!!] -> user-id|nil)."
   [f]
   (reify TokenCatalog
-    (lookup-user-id [_ token]
-      (when (string? token) (f token)))))
+    (lookup-user-id [_ token!!]
+      (when (string? token!!) (f token!!)))
+
+    (lookup-user-id [_ token!! context]
+      (when (string? token!!) (f token!! context)))))
 
 (defn composite
   "Try multiple catalogs in order; return the first non-nil user-id."
   [catalogs]
   (let [catalogs' (remove nil? catalogs)]
     (reify TokenCatalog
-      (lookup-user-id [_ token]
-        (some #(lookup-user-id % token) catalogs')))))
+      (lookup-user-id [_ token!!]
+        (some #(lookup-user-id % token!!) catalogs'))
+
+      (lookup-user-id [this token!! _context]
+        (lookup-user-id this token!!)))))
 
 (defn edn-file-catalog
   "EDN-backed catalog.
@@ -52,15 +67,18 @@
   Note: reloads the file on each call; intended for low traffic and small catalogs."
   [path]
   (reify TokenCatalog
-    (lookup-user-id [_ token]
-      (when (string? token)
-        (let [h (k/hash-token token)
+    (lookup-user-id [_ token!!]
+      (when (string? token!!)
+        (let [h (k/hash-token token!!)
               rows (sfs/slurp-edn path)]
           (some (fn [{:keys [hashed user-id]}]
                   (when (= hashed h) user-id))
-                rows))))))
+                rows))))
+
+    (lookup-user-id [this token!! _context]
+      (lookup-user-id this token!!))))
 
 (defn valid-token?
   "Return true if token is valid in catalog, else false."
-  [catalog token]
-  (boolean (lookup-user-id catalog token)))
+  [catalog token!!]
+  (boolean (lookup-user-id catalog token!!)))
