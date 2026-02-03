@@ -9,7 +9,7 @@
          ring/ring-anti-forgery       {:mvn/version "1.4.0"}
 
          com.sturdystats/turvata      {:local/root "../../turvata"}
-         com.sturdystats/sturdy-fs    {:mvn/version "0.1.2"}
+         com.sturdystats/sturdy-fs    {:mvn/version "0.1.5"}
          com.sturdystats/malli-firewall {:mvn/version "0.1.2"}}
 
  :aliases

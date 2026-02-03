@@ -16,6 +16,10 @@ secure, safeguard, ensure, assure, defend, indemnify, insure, cover
 
 It is designed for **internal tools and admin portals**, not consumer-facing auth.
 
+Turvata was originally developed to meet the internal security and operational requirements of **Sturdy Statistics**.
+It is published as open source to support transparency, auditability, and reuse, but its design is intentionally conservative and driven by real production needs.
+We may not accept feature requests that dilute its focus.
+
 ## Design goals
 
 - **Explicit**:
