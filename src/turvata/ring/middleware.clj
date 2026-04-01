@@ -10,13 +10,14 @@
    [turvata.catalog :as c]
    [turvata.runtime :as rt]
 
+   [turvata.ring.util :refer [clear-cookie-attrs ms->s]]
+
+   [sturdy.middleware.cache-control :as cc]
    [taoensso.truss :refer [have]]))
 
 (set! *warn-on-reflection* true)
 
 (def ^:private bearer-re #"(?i)^(?:Bearer|Token)\s+(.+)\s*$")
-
-(defn ms->s [ms] (quot (long ms) 1000))
 
 (defn require-api-auth
   "Ring middleware that requires an API token in the Authorization header.
@@ -38,7 +39,7 @@
         (-> (resp/response {:error "unauthorized"})
             (resp/status 401)
             (resp/header "WWW-Authenticate" "Bearer realm=\"api\", error=\"invalid_token\"")
-            (resp/header "Cache-Control" "no-store")
+            cc/with-nostore
             (resp/header "Vary" "Authorization"))
         (handler (assoc request :user-id user-id))))))
 
@@ -67,7 +68,7 @@
                   cookie-settings' (assoc cookie-settings :max-age max-age)]
               (-> response
                   (resp/set-cookie cookie-name token!! cookie-settings')
-                  (resp/header "Vary" "Cookie")))
+                  cc/with-vary-cookie))
             ;; don't change cookie
             response))
 
@@ -75,9 +76,8 @@
         (let [target     (str (:uri request)
                               (when-let [qs (:query-string request)] (str "?" qs)))
               login-url  (have string? (rt/settings [:login-url]))
-              loc        (str login-url "?next=" (rcodec/url-encode target))
-              cookie-settings' (assoc cookie-settings :max-age 0)]
+              loc        (str login-url "?next=" (rcodec/url-encode target))]
           (-> (resp/redirect loc)
-              (resp/set-cookie cookie-name "" cookie-settings')
-              (resp/header "Cache-Control" "no-store")
-              (resp/header "Vary" "Cookie")))))))
+              (resp/set-cookie cookie-name "" (clear-cookie-attrs cookie-settings))
+              cc/with-nostore
+              cc/with-vary-cookie))))))

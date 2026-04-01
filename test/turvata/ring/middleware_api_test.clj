@@ -1,6 +1,7 @@
 (ns turvata.ring.middleware-api-test
   (:require
    [clojure.test :refer [deftest is use-fixtures]]
+   [clojure.string :as string]
    [turvata.runtime :as rt]
    [turvata.test-support :as ts]
    [ring.mock.request :as mock]
@@ -63,7 +64,9 @@
       (is (= {:error "unauthorized"} (:body resp)))
       (is (re-find #"Bearer realm=\"api\", error=\"invalid_token\""
                    (get-in resp [:headers "WWW-Authenticate"])))
-      (is (= "no-store" (get-in resp [:headers "Cache-Control"]))))
+      (is (string/includes?
+           (get-in resp [:headers "Cache-Control"])
+           "no-store")))
 
     ;; Wrong scheme
     (let [resp (app (-> (mock/request :get "/api/secure")

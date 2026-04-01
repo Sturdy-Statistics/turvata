@@ -64,7 +64,7 @@
     (is (= 303 (:status resp)))
     (is (= "/reports?page=2" (get-in resp [:headers "Location"])))))
 
-(deftest already-logged-in-returns-200
+(deftest already-logged-in-returns-303
   (let [handler  h/login-handler
         cookie   (rt/settings [:cookie-name])
         token    "sess1"
@@ -75,8 +75,7 @@
                    (assoc :params {"username" "alice" "token" "good"})
                    (assoc :cookies {cookie {:value token}}))
           resp (handler req)]
-      (is (= 200 (:status resp)))
-      (is (= {:message "Already logged in"} (:body resp))))))
+      (is (= 303 (:status resp))))))
 
 (deftest login-blocks-malicious-redirects
   (let [handler h/login-handler

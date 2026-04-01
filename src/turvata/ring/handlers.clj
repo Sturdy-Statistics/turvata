@@ -2,13 +2,16 @@
   (:require
    [ring.util.response :as resp]
    [ring.util.codec :as rcodec]
+
    [turvata.runtime :as rt]
    [turvata.core :refer [authenticate-browser-token]]
    [turvata.catalog :as cat]
    [turvata.session :as sess]
    [turvata.keys :as keys]
-   [turvata.ring.middleware :refer [ms->s]]
+   [turvata.ring.util :refer [clear-cookie-attrs ms->s]]
    [turvata.schema :as s]
+
+   [sturdy.middleware.cache-control :as cc]
    [sturdy.malli-firewall.web :refer [with-schema]]
    [taoensso.truss :refer [have]]))
 
@@ -52,9 +55,10 @@
           ok?           (and user-id username (= username (str user-id)))]
 
      (cond
-       ;; Already logged in → 200 JSON
+       ;; Already logged in → act like a successful login and redirect
        already
-       (resp/response {:message "Already logged in"})
+       (-> (resp/redirect redirect-to 303)
+           cc/with-nostore)
 
        ;; Valid credentials → create session, set cookie, redirect
        ok?
@@ -65,7 +69,7 @@
          (sess/put-entry! (rt/store) session-token {:user-id username :expires-at expires-at})
          (-> (resp/redirect redirect-to 303) ;; See Other after POST
              (resp/set-cookie cookie session-token cookie-attrs)
-             (resp/header "Cache-Control" "no-store")))
+             cc/with-nostore))
 
        ;; Bad credentials → bounce back to login with error + next
        :else
@@ -74,16 +78,7 @@
                         "?error=bad_credentials"
                         (when redirect-to (str "&next=" (rcodec/url-encode redirect-to))))]
          (-> (resp/redirect loc 303)
-             (resp/header "Cache-Control" "no-store")))))))
-
-(def ^:private expired-http-date
-  ;; RFC 7231 IMF-fixdate, safely in the past
-  "Thu, 01 Jan 1970 00:00:00 GMT")
-
-(defn- clear-attrs [cookie-attrs-map]
-  (assoc cookie-attrs-map
-         :max-age 0
-         :expires expired-http-date))
+             cc/with-nostore))))))
 
 (defn logout-handler
   "POST handler Clear cookie + session and redirect to a confirmation page."
@@ -96,5 +91,5 @@
        (sess/delete-entry! (rt/store) token))
      (let [cookie-settings  (rt/cookie-attrs request)]
        (-> (resp/redirect redirect 303) ;; See Other after POST
-           (resp/set-cookie cookie "" (clear-attrs cookie-settings))
-           (resp/header "Cache-Control" "no-store"))))))
+           (resp/set-cookie cookie "" (clear-cookie-attrs cookie-settings))
+           cc/with-nostore)))))
