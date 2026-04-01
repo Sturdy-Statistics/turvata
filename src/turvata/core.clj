@@ -4,6 +4,8 @@
    [turvata.session :as sess]
    [taoensso.truss :refer [have]]))
 
+(set! *warn-on-reflection* true)
+
 (defn authenticate-browser-token
   "Authenticate a browser session token.
 

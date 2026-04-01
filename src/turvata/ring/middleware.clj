@@ -12,6 +12,8 @@
 
    [taoensso.truss :refer [have]]))
 
+(set! *warn-on-reflection* true)
+
 (def ^:private bearer-re #"(?i)^(?:Bearer|Token)\s+(.+)\s*$")
 
 (defn ms->s [ms] (quot (long ms) 1000))

@@ -3,6 +3,8 @@
    [clojure.string :as string]
    [sturdy.malli-firewall.core :as f]))
 
+(set! *warn-on-reflection* true)
+
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Utilities
 

@@ -9,6 +9,8 @@
    (turvata.session SessionStore)
    (turvata.catalog TokenCatalog)))
 
+(set! *warn-on-reflection* true)
+
 (def ^:dynamic *runtime*
   "runtime {:settings {} :catalog ... :session ...}"
   nil)

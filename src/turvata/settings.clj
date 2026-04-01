@@ -3,6 +3,8 @@
    [clojure.string :as string]
    [turvata.schema :as schema]))
 
+(set! *warn-on-reflection* true)
+
 (defn- hdr [req k]
   (some-> req :headers (get k)))
 

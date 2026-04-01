@@ -3,6 +3,8 @@
    [turvata.keys :as k]
    [sturdy.fs :as sfs]))
 
+(set! *warn-on-reflection* true)
+
 (defprotocol TokenCatalog
   (lookup-user-id
     [this token!!]

@@ -12,6 +12,8 @@
    [sturdy.malli-firewall.web :refer [with-schema]]
    [taoensso.truss :refer [have]]))
 
+(set! *warn-on-reflection* true)
+
 (defn logged-in?-handler
   "Return the current session auth map (e.g. {:user-id ...}) if the request is
   already authenticated via the session cookie, else nil. Not a Ring response."

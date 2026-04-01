@@ -1,5 +1,7 @@
 (ns turvata.session)
 
+(set! *warn-on-reflection* true)
+
 (defn now-ms [] (System/currentTimeMillis))
 
 (defprotocol SessionStore
