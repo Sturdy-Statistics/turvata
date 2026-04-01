@@ -57,8 +57,8 @@
       (lookup-user-id [_ token!!]
         (some #(lookup-user-id % token!!) catalogs'))
 
-      (lookup-user-id [this token!! _context]
-        (lookup-user-id this token!!)))))
+      (lookup-user-id [_ token!! context]
+        (some #(lookup-user-id % token!! context) catalogs')))))
 
 (defn edn-file-catalog
   "EDN-backed catalog.
