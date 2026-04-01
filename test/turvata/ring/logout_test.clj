@@ -1,53 +1,54 @@
 (ns turvata.ring.logout-test
   (:require
-   [clojure.test :refer [deftest is use-fixtures]]
-   [turvata.runtime :as rt]
-   [turvata.test-support :as ts]
+   [clojure.test :refer [deftest is]]
    [ring.mock.request :as mock]
+   [turvata.settings :as settings]
    [turvata.session :as sess]
    [turvata.ring.handlers :as h]))
 
-(def ^:dynamic *store* nil)
-
-(use-fixtures :each
-  (fn [f]
-    (let [store (sess/in-memory-store)]
-      (binding [*store*    store
-                rt/*runtime* (rt/make-runtime {:settings ts/test-settings
-                                               :store    store})]
-        (f)))))
+(defn- make-env []
+  {:store (sess/in-memory-store)
+   :settings (settings/normalize {:post-logout-redirect "/auth/logout/success"
+                                  :cookie-name "test-cookie"})})
 
 (deftest logout-clears-session-and-cookie
-  (let [cookie    (rt/settings [:cookie-name])
-        token     "tok"
-        _         (sess/put-entry! *store* token {:user-id "alice" :expires-at (+ (System/currentTimeMillis) 60000)})
-        app       h/logout-handler
-        req       (-> (mock/request :post "/auth/logout")
-                      (assoc :cookies {cookie {:value token}}))
-        resp      (app req)]
-    (is (= 303 (:status resp)))
-    (is (= "/auth/logout/success" (get-in resp [:headers "Location"])))
-    ;; cookie cleared
-    (is (= "" (get-in resp [:cookies cookie :value])))
-    (is (= 0  (get-in resp [:cookies cookie :max-age])))
-    ;; session removed
-    (is (nil? (sess/get-entry *store* token)))))
+  (let [env   (make-env)
+        token "tok"]
+    (sess/put-entry! (:store env) token {:user-id "alice" :expires-at (+ (sess/now-ms) 60000)})
+    (let [app  (h/make-logout-handler env)
+          req  (-> (mock/request :post "/auth/logout")
+                   (assoc :cookies {"test-cookie" {:value token}}))
+          resp (app req)]
+      (is (= 303 (:status resp)))
+      (is (= "/auth/logout/success" (get-in resp [:headers "Location"])))
+
+      ;; Cookie actively cleared
+      (is (= "" (get-in resp [:cookies "test-cookie" :value])))
+      (is (= 0  (get-in resp [:cookies "test-cookie" :max-age])))
+      (is (= "Thu, 01 Jan 1970 00:00:00 GMT" (get-in resp [:cookies "test-cookie" :expires])))
+
+      ;; Cache prevented
+      (is (re-find #"no-store" (get-in resp [:headers "Cache-Control"])))
+
+      ;; Session removed from store
+      (is (nil? (sess/get-entry (:store env) token))))))
 
 (deftest logout-without-cookie-still-redirects
-  (let [cookie   (rt/settings [:cookie-name])
-        app      h/logout-handler
-        resp     (app (mock/request :post "/auth/logout"))]
+  (let [env  (make-env)
+        app  (h/make-logout-handler env)
+        resp (app (mock/request :post "/auth/logout"))]
     (is (= 303 (:status resp)))
     (is (= "/auth/logout/success" (get-in resp [:headers "Location"])))
     ;; still emits a clearing cookie with max-age 0
-    (is (= "" (get-in resp [:cookies cookie :value])))
-    (is (= 0  (get-in resp [:cookies cookie :max-age])))))
+    (is (= "" (get-in resp [:cookies "test-cookie" :value])))
+    (is (= 0  (get-in resp [:cookies "test-cookie" :max-age])))))
 
 (deftest logout-strips-unwanted-params
-  (let [handler h/logout-handler
+  (let [env     (make-env)
+        handler (h/make-logout-handler env)
         req     (-> (mock/request :post "/auth/logout")
                     (assoc :params {"malicious_param" "value"}))
         resp    (handler req)]
-    ;; If *strip-unknown-keys* is true (default), this should succeed
-    ;; but the param is ignored.
+    ;; Malli's string-coercion strips the unknown string key before closed-map validation.
+    ;; The handler safely processes the empty request and redirects.
     (is (= 303 (:status resp)))))

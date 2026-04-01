@@ -1,49 +1,44 @@
 (ns turvata.ring.login-test
   (:require
-   [clojure.test :refer [deftest is use-fixtures]]
-   [turvata.runtime :as rt]
+   [clojure.test :refer [deftest is]]
    [ring.mock.request :as mock]
    [ring.middleware.params :refer [wrap-params]]
    [ring.util.codec :as rcodec]          ;; for form encoding
-
    [turvata.catalog :as cat]
    [turvata.session :as sess]
+   [turvata.settings :as settings]
    [turvata.ring.handlers :as h]))
-
-(def ^:dynamic *store* nil)
 
 (def catalog
   (reify cat/TokenCatalog
     (lookup-user-id [_ token _req] ({"good" "alice"} token))))
 
-(use-fixtures :each
-  (fn [f]
-    (let [store (sess/in-memory-store)]
-      (binding [*store*    store
-                rt/*runtime* (rt/make-runtime {:settings {:session-ttl-ms 60000
-                                                          :post-login-redirect "/admin"}
-                                               :store    store
-                                               :catalog  catalog})]
-        (f)))))
-
+(defn- make-env []
+  {:store (sess/in-memory-store)
+   :catalog catalog
+   :settings (settings/normalize {:session-ttl-ms 60000
+                                  :post-login-redirect "/admin"
+                                  :cookie-name "test-cookie"
+                                  :login-url "/auth/login"})})
 
 (deftest login-success-sets-cookie-and-redirects
-  (let [app      (-> h/login-handler
-                     wrap-params)
-        req      (-> (mock/request :post "/auth/login")
-                     (mock/header "content-type" "application/x-www-form-urlencoded")
-                     (mock/body (rcodec/form-encode
-                                 {"username" "alice"
-                                  "token" "good"})))
-        resp     (app req)
-        cookie   (rt/settings [:cookie-name])]
+  (let [env  (make-env)
+        app  (-> (h/make-login-handler env)
+                 wrap-params)
+        req  (-> (mock/request :post "/auth/login")
+                 (mock/header "content-type" "application/x-www-form-urlencoded")
+                 (mock/body (rcodec/form-encode
+                             {"username" "alice"
+                              "token" "good"})))
+        resp (app req)]
     (is (= 303 (:status resp)))
     (is (= "/admin" (get-in resp [:headers "Location"])))
-    (is (= "alice" (:user-id (sess/get-entry *store* (get-in resp [:cookies cookie :value])))))
-    (is (pos? (get-in resp [:cookies cookie :max-age])))))
+    (is (= "alice" (:user-id (sess/get-entry (:store env) (get-in resp [:cookies "test-cookie" :value])))))
+    (is (pos? (get-in resp [:cookies "test-cookie" :max-age])))))
 
 (deftest login-bad-credentials-redirects-to-login
-  (let [handler h/login-handler
+  (let [env     (make-env)
+        handler (h/make-login-handler env)
         request (-> (mock/request :post "/auth/login")
                     (assoc :params {"username" "alice" "token" "nope"}))
         resp    (handler request)]
@@ -52,33 +47,38 @@
     (is (re-find #"/auth/login\?error=bad_credentials" (get-in resp [:headers "Location"])))))
 
 (deftest login-preserves-next-on-success
-  (let [app        (-> h/login-handler
-                       wrap-params)
-        req        (-> (mock/request :post "/auth/login")
-                       (mock/header "content-type" "application/x-www-form-urlencoded")
-                       (mock/body (rcodec/form-encode
-                                   {"username" "alice"
-                                    "token"    "good"
-                                    "next"     "/reports?page=2"})))
-        resp       (app req)]
+  (let [env  (make-env)
+        app  (-> (h/make-login-handler env)
+                 wrap-params)
+        req  (-> (mock/request :post "/auth/login")
+                 (mock/header "content-type" "application/x-www-form-urlencoded")
+                 (mock/body (rcodec/form-encode
+                             {"username" "alice"
+                              "token"    "good"
+                              "next"     "/reports?page=2"})))
+        resp (app req)]
     (is (= 303 (:status resp)))
     (is (= "/reports?page=2" (get-in resp [:headers "Location"])))))
 
 (deftest already-logged-in-returns-303
-  (let [handler  h/login-handler
-        cookie   (rt/settings [:cookie-name])
-        token    "sess1"
-        now      (System/currentTimeMillis)]
+  (let [env     (make-env)
+        handler (h/make-login-handler env)
+        token   "sess1"
+        now     (System/currentTimeMillis)]
     ;; seed a valid session cookie
-    (sess/put-entry! *store* token {:user-id "alice" :expires-at (+ now 60000)})
+    (sess/put-entry! (:store env) token {:user-id "alice" :expires-at (+ now 60000)})
+
     (let [req  (-> (mock/request :post "/auth/login")
                    (assoc :params {"username" "alice" "token" "good"})
-                   (assoc :cookies {cookie {:value token}}))
+                   (assoc :cookies {"test-cookie" {:value token}}))
           resp (handler req)]
-      (is (= 303 (:status resp))))))
+      (is (= 303 (:status resp)))
+      ;; Because of our UX fix, it should redirect to the safe post-login destination
+      (is (= "/admin" (get-in resp [:headers "Location"]))))))
 
 (deftest login-blocks-malicious-redirects
-  (let [handler h/login-handler
+  (let [env     (make-env)
+        handler (h/make-login-handler env)
         ;; Malicious next parameter
         req     (-> (mock/request :post "/auth/login")
                     (assoc :params {"username" "alice"
@@ -90,12 +90,23 @@
     (is (get-in resp [:body :details :next]) "Should report error for the 'next' field")))
 
 (deftest login-security-no-keyword-leak
-  (let [handler h/login-handler
-        junk-key (str "attack-" (java.util.UUID/randomUUID))
-        req     (-> (mock/request :post "/auth/login")
-                    (assoc :params {junk-key "val"
-                                    "username" "alice"
-                                    "token" "good"}))
-        _       (handler req)]
+  (let [env      (make-env)
+        app      (-> (h/make-login-handler env)
+                     wrap-params)
+        junk-key (str "attack-" (random-uuid))
+        req      (-> (mock/request :post "/auth/login")
+                     (mock/header "content-type" "application/x-www-form-urlencoded")
+                     (mock/body (rcodec/form-encode
+                                 {junk-key   "val"
+                                  "username" "alice"
+                                  "token"    "good"})))
+        resp     (app req)]
+
+    ;; Malli-firewall coerces the string keys, safely strips the unknown 'junk-key',
+    ;; and successfully processes the login!
+    (is (= 303 (:status resp)))
+    (is (= "/admin" (get-in resp [:headers "Location"])))
+
+    ;; Most importantly: the malicious key was safely ignored and never interned!
     (is (nil? (find-keyword junk-key))
         "Unknown keys must never be interned as keywords.")))
