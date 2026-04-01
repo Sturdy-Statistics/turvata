@@ -29,13 +29,14 @@
       :cookie-attrs {:http-only true :same-site :strict}}]
     wrap-anti-forgery]))                ;anti-forgery uses the session
 
-(def admin-middleware
+(defn make-admin-middleware
   "Middleware for admin routes. (which are private).
    These run AFTER routing, and IN ORDER listed
    This matches login-middleware, with auth/require-web-auth added"
+  [env]
   (concat
    login-middleware                    ;web stuff+session+anti-forgery
-   [auth/require-web-auth]))           ;session auth
+   [(auth/require-web-auth env)]))     ;session auth
 
 ;;; same origin
 

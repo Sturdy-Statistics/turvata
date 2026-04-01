@@ -37,7 +37,7 @@
        "<a href='/auth/logout'>Logout</a>"
        "</body></html>"))
 
-(defn home [request]
+(defn home [_request]
   (str "<!doctype html><html><body>"
        "<h1>Example App</h1>"
        "<p><a href='/auth/logout'>Logout</a></p>"

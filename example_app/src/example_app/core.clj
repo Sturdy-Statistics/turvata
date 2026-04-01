@@ -18,16 +18,15 @@
                 (constantly bad-request-response))
 
 (defn app []
-  ;; Initialize turvata once on startup
-  (auth/init-turvata!)
-  (ring/ring-handler
-   (ring/router
-    [(routes/public-routes)
-     (routes/login-routes)
-     (routes/admin-routes)]
-    ;; global middleware BEFORE routing:
-    {:data {:middleware [wrap-params]}})
-   (ring/create-default-handler)))
+  (let [env (auth/make-turvata-env)]
+    (ring/ring-handler
+     (ring/router
+      [(routes/public-routes)
+       (routes/login-routes env)
+       (routes/admin-routes env)]
+      ;; global middleware BEFORE routing:
+      {:data {:middleware [wrap-params]}})
+     (ring/create-default-handler))))
 
 (defn -main [& _args]
   (let [handler (app)]

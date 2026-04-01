@@ -1,7 +1,7 @@
 (ns example-app.auth
   (:require
-   [turvata.runtime :as trt]
    [turvata.session :as sess]
+   [turvata.settings :as settings]
    [turvata.catalog]
 
    [sturdy.fs :as sfs]))
@@ -38,17 +38,16 @@
         post-logout-redirect (post-logout-redirect)
         http-only? true
         same-site :lax]
-   (cond-> {}
-     cookie-name (assoc :cookie-name cookie-name)
-     session-ttl-ms (assoc :session-ttl-ms session-ttl-ms)
-     login-url (assoc :login-url login-url)
-     post-login-redirect (assoc :post-login-redirect post-login-redirect)
-     post-logout-redirect (assoc :post-logout-redirect post-logout-redirect)
-     http-only? (assoc :http-only? http-only?)
-     same-site (assoc :same-site same-site))))
+    (cond-> {}
+      cookie-name (assoc :cookie-name cookie-name)
+      session-ttl-ms (assoc :session-ttl-ms session-ttl-ms)
+      login-url (assoc :login-url login-url)
+      post-login-redirect (assoc :post-login-redirect post-login-redirect)
+      post-logout-redirect (assoc :post-logout-redirect post-logout-redirect)
+      http-only? (assoc :http-only? http-only?)
+      same-site (assoc :same-site same-site))))
 
-(defn init-turvata! []
-  (trt/init!
-   {:settings (turvata-settings)
-    :store store
-    :catalog (build-catalog (token-file))}))
+(defn make-turvata-env []
+  {:settings (settings/normalize (turvata-settings))
+   :catalog  (build-catalog (token-file))
+   :store    store})

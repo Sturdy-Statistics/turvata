@@ -1,16 +1,16 @@
 {:paths ["src" "resources"]
- :deps  {org.clojure/clojure          {:mvn/version "1.12.2"}
+ :deps  {org.clojure/clojure          {:mvn/version "1.12.4"}
          ring/ring-core               {:mvn/version "1.14.2"}
          ring/ring-jetty-adapter      {:mvn/version "1.14.2"}
+
+         org.slf4j/slf4j-nop          {:mvn/version "2.0.17"}
 
          metosin/reitit               {:mvn/version "0.9.1"}
          metosin/muuntaja             {:mvn/version "0.6.11"}
 
          ring/ring-anti-forgery       {:mvn/version "1.4.0"}
 
-         com.sturdystats/turvata      {:local/root "../../turvata"}
-         com.sturdystats/sturdy-fs    {:mvn/version "0.1.6"}
-         com.sturdystats/malli-firewall {:mvn/version "0.2.1"}}
+         com.sturdystats/turvata      {:local/root "../../turvata"}}
 
  :aliases
  {:run {:main-opts ["-m" "example-app.core"]}}}

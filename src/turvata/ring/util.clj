@@ -1,4 +1,6 @@
-(ns turvata.ring.util)
+(ns turvata.ring.util
+  (:require
+   [taoensso.truss :refer [have]]))
 
 (def ^:private expired-http-date
   ;; RFC 7231 IMF-fixdate, safely in the past
@@ -10,3 +12,9 @@
          :expires expired-http-date))
 
 (defn ms->s [ms] (quot (long ms) 1000))
+
+(defn cookie-attrs [settings request]
+  {:path "/"
+   :http-only (have boolean? (:http-only? settings))
+   :same-site (have keyword? (:same-site settings))
+   :secure    ((:https? settings) request)})

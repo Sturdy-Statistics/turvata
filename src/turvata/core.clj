@@ -1,6 +1,5 @@
 (ns turvata.core
   (:require
-   [turvata.runtime :as rt]
    [turvata.session :as sess]
    [taoensso.truss :refer [have]]))
 
@@ -17,19 +16,20 @@
    is at or below 50%. If TTL is non-positive, the token is never refreshed.
 
    Returns nil if the token is missing, unknown, or expired."
-  [token!!]
-  (rt/require-runtime)
-  (let [now (sess/now-ms)]
+  [env token!!]
+  (let [{:keys [store settings]} env
+        now                      (sess/now-ms)]
     (when-let [{:keys [user-id expires-at]}
-               (and (not-empty token!!) (sess/get-entry (rt/store) token!!))]
+               (and (not-empty token!!)
+                    (sess/get-entry store token!!))]
       (when (> expires-at now)
-        (let [ttl       (rt/settings [:session-ttl-ms])
+        (let [ttl       (:session-ttl-ms settings)
               remaining (- expires-at now)]
           (if (pos? ttl)
             (if (<= remaining (quot ttl 2))
               ;; refresh
               (let [new-exp (+ now ttl)
-                    touched (sess/touch! (rt/store) token!! new-exp)]
+                    touched (sess/touch! store token!! new-exp)]
                 {:user-id user-id
                  :expires-at (have integer? (:expires-at touched)) ; read back what store wrote
                  :refreshed? true})

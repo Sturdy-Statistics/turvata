@@ -8,9 +8,8 @@
    [turvata.core :refer [authenticate-browser-token]]
    [turvata.session :as s]
    [turvata.catalog :as c]
-   [turvata.runtime :as rt]
 
-   [turvata.ring.util :refer [clear-cookie-attrs ms->s]]
+   [turvata.ring.util :refer [clear-cookie-attrs ms->s cookie-attrs]]
 
    [sturdy.middleware.cache-control :as cc]
    [taoensso.truss :refer [have]]))
@@ -25,23 +24,23 @@
   Expects: Authorization: Bearer <token> (also accepts Token <token>).
   On success, assoc :user-id in the request.
   On failure, returns 401 with WWW-Authenticate and Cache-Control: no-store."
-  [handler]
-  (fn [request]
-    (rt/require-runtime)
-    (let [auth-header (get-in request [:headers "authorization"])
-          token!!     (some->> auth-header
-                               (re-find bearer-re)
-                               second
-                               string/trim
-                               not-empty)
-          user-id     (when token!! (c/lookup-user-id (rt/catalog) token!! request))]
-      (if-not user-id
-        (-> (resp/response {:error "unauthorized"})
-            (resp/status 401)
-            (resp/header "WWW-Authenticate" "Bearer realm=\"api\", error=\"invalid_token\"")
-            cc/with-nostore
-            (resp/header "Vary" "Authorization"))
-        (handler (assoc request :user-id user-id))))))
+  [env]
+  (fn [handler]
+    (fn [request]
+      (let [auth-header (get-in request [:headers "authorization"])
+            token!!     (some->> auth-header
+                                 (re-find bearer-re)
+                                 second
+                                 string/trim
+                                 not-empty)
+            user-id     (when token!! (c/lookup-user-id (:catalog env) token!! request))]
+        (if-not user-id
+          (-> (resp/response {:error "unauthorized"})
+              (resp/status 401)
+              (resp/header "WWW-Authenticate" "Bearer realm=\"api\", error=\"invalid_token\"")
+              cc/with-nostore
+              (resp/header "Vary" "Authorization"))
+          (handler (assoc request :user-id user-id)))))))
 
 (defn require-web-auth
   "Ring middleware that requires a valid session cookie.
@@ -50,34 +49,35 @@
   On success, assoc :user-id in the request. May refresh the cookie on response.
   On failure, clears the cookie and redirects to the configured login URL with
   a ?next=... parameter for the current request URI."
-  [handler]
-  (fn [request]
-    (rt/require-runtime)
-    (let [cookie-name      (have string? (rt/settings [:cookie-name]))
-          token!!          (get-in request [:cookies cookie-name :value])
-          cookie-settings  (rt/cookie-attrs request)
-          auth             (authenticate-browser-token token!!)]
+  [env]
+  (fn [handler]
+    (fn [request]
+      (let [{:keys [settings]} env
+            cookie-name      (have string? (:cookie-name settings))
+            token!!          (get-in request [:cookies cookie-name :value])
+            cookie-settings  (cookie-attrs settings request)
+            auth             (authenticate-browser-token env token!!)]
 
-      (if-let [{:keys [user-id expires-at refreshed?]} auth]
-        ;; authenticated path... nil-preserving!
-        (when-let [response (handler (assoc request :user-id user-id))]
-          (if refreshed?
-            ;; refresh cookie if session refreshed
-            (let [remaining        (- expires-at (s/now-ms))
-                  max-age          (ms->s (max 0 remaining))
-                  cookie-settings' (assoc cookie-settings :max-age max-age)]
-              (-> response
-                  (resp/set-cookie cookie-name token!! cookie-settings')
-                  cc/with-vary-cookie))
-            ;; don't change cookie
-            response))
+        (if-let [{:keys [user-id expires-at refreshed?]} auth]
+          ;; authenticated path... nil-preserving!
+          (when-let [response (handler (assoc request :user-id user-id))]
+            (if refreshed?
+              ;; refresh cookie if session refreshed
+              (let [remaining        (- expires-at (s/now-ms))
+                    max-age          (ms->s (max 0 remaining))
+                    cookie-settings' (assoc cookie-settings :max-age max-age)]
+                (-> response
+                    (resp/set-cookie cookie-name token!! cookie-settings')
+                    cc/with-vary-cookie))
+              ;; don't change cookie
+              response))
 
-        ;; unauthenticated → redirect to login with ?next=<current path+qs>
-        (let [target     (str (:uri request)
-                              (when-let [qs (:query-string request)] (str "?" qs)))
-              login-url  (have string? (rt/settings [:login-url]))
-              loc        (str login-url "?next=" (rcodec/url-encode target))]
-          (-> (resp/redirect loc)
-              (resp/set-cookie cookie-name "" (clear-cookie-attrs cookie-settings))
-              cc/with-nostore
-              cc/with-vary-cookie))))))
+          ;; unauthenticated → redirect to login with ?next=<current path+qs>
+          (let [target     (str (:uri request)
+                                (when-let [qs (:query-string request)] (str "?" qs)))
+                login-url  (have string? (:login-url settings))
+                loc        (str login-url "?next=" (rcodec/url-encode target))]
+            (-> (resp/redirect loc)
+                (resp/set-cookie cookie-name "" (clear-cookie-attrs cookie-settings))
+                cc/with-nostore
+                cc/with-vary-cookie)))))))
