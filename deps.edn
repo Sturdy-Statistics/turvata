@@ -3,7 +3,7 @@
          com.taoensso/truss                {:mvn/version "2.2.0"}
          com.sturdystats/sturdy-fs         {:mvn/version "0.1.7"}
          com.sturdystats/malli-firewall    {:mvn/version "0.2.1"}
-         com.sturdystats/sturdy-middleware {:mvn/version "0.1.4"}}
+         com.sturdystats/sturdy-middleware {:mvn/version "0.1.5"}}
 
  :aliases {:test
            {:extra-paths ["test" "test-resources"]
