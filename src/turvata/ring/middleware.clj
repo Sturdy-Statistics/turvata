@@ -35,9 +35,10 @@
                                  not-empty)
             user-id     (when token!! (c/lookup-user-id (:catalog env) token!! request))]
         (if-not user-id
-          (-> (resp/response {:error "unauthorized"})
+          (-> (resp/response {:error "Unauthorized"
+                              :message "Request lacks valid authentication credentials for the requested resource"})
               (resp/status 401)
-              (resp/header "WWW-Authenticate" "Bearer realm=\"api\", error=\"invalid_token\"")
+              (resp/header "WWW-Authenticate" "Bearer realm=\"turvata\", error=\"invalid_token\"")
               cc/with-nostore
               (resp/header "Vary" "Authorization"))
           (handler (assoc request :user-id user-id)))))))
