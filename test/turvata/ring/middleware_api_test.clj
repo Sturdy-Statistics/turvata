@@ -54,8 +54,8 @@
     (testing "No Authorization header at all"
       (let [resp (app (mock/request :get "/api/secure"))]
         (is (= 401 (:status resp)))
-        (is (= {:error "unauthorized"} (:body resp)))
-        (is (re-find #"Bearer realm=\"api\", error=\"invalid_token\""
+        (is (= "Unauthorized" (get-in resp [:body :error])))
+        (is (re-find #"Bearer realm=\"turvata\", error=\"invalid_token\""
                      (get-in resp [:headers "WWW-Authenticate"])))
         (is (string/includes? (get-in resp [:headers "Cache-Control"]) "no-store"))
         (is (re-find #"Authorization" (get-in resp [:headers "Vary"])))))
@@ -78,4 +78,4 @@
         resp (app (-> (mock/request :get "/api/secure")
                       (mock/header "authorization" "Bearer nope")))]
     (is (= 401 (:status resp)))
-    (is (= {:error "unauthorized"} (:body resp)))))
+    (is (= "Unauthorized" (get-in resp [:body :error])))))
