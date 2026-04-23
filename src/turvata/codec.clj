@@ -20,10 +20,12 @@
 
 (defn parse-token!!
   "Parses a V2 token string into its structural map.
-   Fails fast on checksum mismatch."
+   Fails fast on checksum mismatch or structural invalidity."
   [raw-token!!]
   (try
-    ;; Normalize the entire token via lowercase conversion, no whitespace trimming
+    (when-not (re-matches #"^[a-zA-Z0-9\-]+_[0-9a-fA-F]+_[a-zA-Z2-7]+$" raw-token!!)
+      (u/throw-400!))
+
     (let [normalized-token  (str/lower-case raw-token!!)
           parts             (str/split normalized-token #"_")]
 

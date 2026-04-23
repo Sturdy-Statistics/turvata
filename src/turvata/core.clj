@@ -48,7 +48,7 @@
   "returns user-id or nil"
   [raw-token!! env request]
   (try
-    (let [token-map (:token-map (codec/parse-token!! raw-token!!))
+    (let [token-map (codec/parse-token!! raw-token!!)
           user-id   (:user-id token-map)
           db-row    (cat/lookup-record (:catalog env) user-id request)
           pepper    (get-in env [:settings :pepper])

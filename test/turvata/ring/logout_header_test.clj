@@ -5,14 +5,17 @@
    [ring.middleware.cookies :refer [wrap-cookies]]
    [turvata.settings :as settings]
    [turvata.session :as sess]
-   [turvata.ring.handlers :as h])
+   [turvata.ring.handlers :as h]
+   [turvata.test-support :as ts])
   (:import
    (java.util.regex Pattern)))
 
 (defn- make-env []
   {:store (sess/in-memory-store)
-   :settings (settings/normalize {:post-logout-redirect "/auth/logout/success"
-                                  :cookie-name "test-cookie"})})
+   :settings (settings/normalize
+              (merge ts/test-settings
+                     {:post-logout-redirect "/auth/logout/success"
+                      :cookie-name "test-cookie"}))})
 
 (deftest logout-sets-set-cookie-header
   (let [env        (make-env)

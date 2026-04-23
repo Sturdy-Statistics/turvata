@@ -17,6 +17,9 @@
 ;; Thread-safe reusable codec instance
 (def ^:private ^Base32 base32-codec (Base32.))
 
+(defn bytes= [a b]
+  (Arrays/equals ^bytes a ^bytes b))
+
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; checksums
 
@@ -82,3 +85,15 @@
   (-> (.encodeAsString base32-codec payload-bytes!!)
       (string/replace "=" "")
       (string/lower-case)))
+
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; hex
+
+
+(def ^:private ^HexFormat hex-format (HexFormat/of))
+
+(defn bytes->hex-string ^String [^bytes bs]
+  (.formatHex hex-format bs))
+
+(defn hex-string->bytes ^bytes [^String s]
+  (.parseHex hex-format s))

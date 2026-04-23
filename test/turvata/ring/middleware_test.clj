@@ -4,16 +4,19 @@
    [ring.mock.request :as mock]
    [turvata.settings :as settings]
    [turvata.session :as sess]
-   [turvata.ring.middleware :as mw]))
+   [turvata.ring.middleware :as mw]
+   [turvata.test-support :as ts]))
 
 ;; A tiny protected handler that echoes the bound :user-id
 (defn echo-user-id [req] {:status 200 :headers {} :body (:user-id req)})
 
 (defn- make-env [ttl-ms]
   {:store (sess/in-memory-store)
-   :settings (settings/normalize {:session-ttl-ms ttl-ms
-                                  :cookie-name "test-cookie"
-                                  :login-url "/auth/login"})})
+   :settings (settings/normalize
+              (merge ts/test-settings
+                     {:session-ttl-ms ttl-ms
+                      :cookie-name "test-cookie"
+                      :login-url "/auth/login"}))})
 
 (deftest web-auth-redirects-when-missing
   (let [env  (make-env 60000)
