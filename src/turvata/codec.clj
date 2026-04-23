@@ -10,7 +10,9 @@
 
 (set! *warn-on-reflection* true)
 
-(def ^:private ^SecureRandom secure-random (SecureRandom.))
+(def ^:private
+  ^SecureRandom secure-random
+  (SecureRandom.))
 
 (defn- nonce
   ^bytes [^long length]
@@ -39,7 +41,7 @@
 
             payload-bytes     (u/b32->bytes ^String encoded-payload!!)
 
-            ;; V2 expects exactly 52 bytes
+            ;; exactly 52 bytes
             raw-data!!        (Arrays/copyOfRange payload-bytes  0 48)
             expected-checksum (-> (Arrays/copyOfRange payload-bytes 48 52)
                                   u/bytes->checksum)]

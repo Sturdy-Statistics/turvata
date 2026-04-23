@@ -8,7 +8,6 @@
 
 (set! *warn-on-reflection* true)
 
-;; Expose the parser so consumers don't need to require codec directly
 (def parse-token!! codec/parse-token!!)
 (def generate-token!! codec/generate-token!!)
 

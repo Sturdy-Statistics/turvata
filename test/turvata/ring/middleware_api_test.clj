@@ -10,6 +10,8 @@
    [turvata.settings :as settings]
    [turvata.ring.middleware :as mw]))
 
+(set! *warn-on-reflection* true)
+
 ;;; Generate valid data for multiple users
 (def alice-uuid (random-uuid))
 (def bob-uuid   (random-uuid))

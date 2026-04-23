@@ -6,6 +6,8 @@
   (:import
    (java.io File)))
 
+(set! *warn-on-reflection* true)
+
 (def uuid-a (random-uuid))
 (def uuid-b (random-uuid))
 
@@ -55,14 +57,14 @@
 ;;       (is (= "192.168.1.1" (cat/lookup-user-id c "admin-tok" {:request-ip "192.168.1.1"})))
 ;;       (is (nil? (cat/lookup-user-id c "admin-tok" nil)))))
 
-  ;; (testing "composite catalog correctly propagates the context down to its children"
-  ;;   (let [c1 (cat/fn-catalog (fn [tok ctx]
-  ;;                              (when (and (= tok "audit-tok") (:audit? ctx))
-  ;;                                "auditor")))
-  ;;         c2 (cat/in-memory-catalog {uuid-a record-a uuid-b record-b}) ; Ignores context, but proves it doesn't crash
-  ;;         c  (cat/composite [c1 c2])]
-  ;;     ;; Proves c1 receives the context and acts on it
-  ;;     (is (= "auditor" (cat/lookup-user-id c "audit-tok" {:audit? true})))
-  ;;     (is (nil?        (cat/lookup-user-id c "audit-tok" {:audit? false})))
-  ;;     ;; Proves c2 still works when called via the 2-arity method
-  ;;     (is (= "user-b"  (cat/lookup-user-id c "b" {:audit? true}))))))
+;; (testing "composite catalog correctly propagates the context down to its children"
+;;   (let [c1 (cat/fn-catalog (fn [tok ctx]
+;;                              (when (and (= tok "audit-tok") (:audit? ctx))
+;;                                "auditor")))
+;;         c2 (cat/in-memory-catalog {uuid-a record-a uuid-b record-b}) ; Ignores context, but proves it doesn't crash
+;;         c  (cat/composite [c1 c2])]
+;;     ;; Proves c1 receives the context and acts on it
+;;     (is (= "auditor" (cat/lookup-user-id c "audit-tok" {:audit? true})))
+;;     (is (nil?        (cat/lookup-user-id c "audit-tok" {:audit? false})))
+;;     ;; Proves c2 still works when called via the 2-arity method
+;;     (is (= "user-b"  (cat/lookup-user-id c "b" {:audit? true}))))))

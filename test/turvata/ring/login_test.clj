@@ -12,6 +12,8 @@
    [turvata.crypto :as crypto]
    [turvata.ring.handlers :as h]))
 
+(set! *warn-on-reflection* true)
+
 (def test-uuid (random-uuid))
 (def test-token-str
   (codec/generate-token!! {:prefix "sturdy-test" :rotation-version 1 :user-id test-uuid}))

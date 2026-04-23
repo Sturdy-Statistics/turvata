@@ -4,6 +4,8 @@
    [turvata.codec :as codec]
    [clojure.string :as str]))
 
+(set! *warn-on-reflection* true)
+
 (deftest generate-and-parse-roundtrip-test
   (testing "A generated token perfectly parses back to its structural inputs"
     (let [uuid     (random-uuid)
@@ -23,7 +25,6 @@
     (let [uuid    (random-uuid)
           token!! (codec/generate-token!! {:prefix "svc" :rotation-version 1 :user-id uuid})]
       (is (= uuid (:user-id (codec/parse-token!! (str/upper-case token!!)))))
-      ;; Whitespace causes immediate failure
       (is (thrown? Exception (codec/parse-token!! (str " " token!!)))))))
 
 (deftest parsing-security-rejections-test

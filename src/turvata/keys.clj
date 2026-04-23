@@ -1,6 +1,4 @@
 (ns turvata.keys
-  (:require
-   [taoensso.truss :refer [have]])
   (:import
    (java.util Base64 Base64$Encoder)
    (java.security SecureRandom)))

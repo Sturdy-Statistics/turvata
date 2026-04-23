@@ -7,6 +7,8 @@
    [turvata.ring.handlers :as h]
    [turvata.test-support :as ts]))
 
+(set! *warn-on-reflection* true)
+
 (defn- make-env []
   {:store (sess/in-memory-store)
    :settings (settings/normalize

@@ -7,6 +7,8 @@
    [turvata.ring.middleware :as mw]
    [turvata.test-support :as ts]))
 
+(set! *warn-on-reflection* true)
+
 ;; A tiny protected handler that echoes the bound :user-id
 (defn echo-user-id [req] {:status 200 :headers {} :body (:user-id req)})
 

@@ -2,6 +2,8 @@
   (:require
    [taoensso.truss :refer [have]]))
 
+(set! *warn-on-reflection* true)
+
 (def ^:private expired-http-date
   ;; RFC 7231 IMF-fixdate, safely in the past
   "Thu, 01 Jan 1970 00:00:00 GMT")

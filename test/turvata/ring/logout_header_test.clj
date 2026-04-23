@@ -10,6 +10,8 @@
   (:import
    (java.util.regex Pattern)))
 
+(set! *warn-on-reflection* true)
+
 (defn- make-env []
   {:store (sess/in-memory-store)
    :settings (settings/normalize

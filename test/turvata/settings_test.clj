@@ -4,6 +4,8 @@
    [turvata.settings :as s]
    [turvata.test-support :as ts]))
 
+(set! *warn-on-reflection* true)
+
 (deftest default-https-test
   (testing "basic scheme"
     (is (true?  (s/default-https? {:scheme :https :headers {}})))

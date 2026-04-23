@@ -3,6 +3,8 @@
    [clojure.test :refer [deftest is testing]]
    [turvata.session :as s]))
 
+(set! *warn-on-reflection* true)
+
 (deftest store-roundtrip-test
   (let [store (s/in-memory-store)
         tok   "t-1"

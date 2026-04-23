@@ -14,9 +14,6 @@
                   {:status 400
                    :message "Malformed or incomplete Turvata token."})))
 
-;; Thread-safe reusable codec instance
-(def ^:private ^Base32 base32-codec (Base32.))
-
 (defn bytes= [a b]
   (Arrays/equals ^bytes a ^bytes b))
 
@@ -67,6 +64,8 @@
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; base32
 
+(def ^:private ^Base32 base32-codec (Base32.))
+
 (defn b32->bytes
   ^bytes [^String b32-str!!]
   (let [;; Normalization strictly focuses on lowercase conversion.
@@ -88,7 +87,6 @@
 
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; hex
-
 
 (def ^:private ^HexFormat hex-format (HexFormat/of))
 

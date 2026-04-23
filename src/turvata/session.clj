@@ -13,9 +13,6 @@
   (prune-expired! [this now-ms])          ;; -> number of deleted sessions
   (touch! [this token new-expires-at]))   ;; -> updated entry | nil
 
-;; session map looks like
-;; {"token-1" {:user-id "alice" :expires-at 123}}
-
 (defn in-memory-store
   "Atom-backed in-memory session store."
   []

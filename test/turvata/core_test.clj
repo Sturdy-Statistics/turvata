@@ -7,6 +7,8 @@
   (:import
    (java.time Instant)))
 
+(set! *warn-on-reflection* true)
+
 (deftest verify-key-test
   (let [pepper  ts/test-pepper-bytes
         uuid    (random-uuid)
@@ -37,7 +39,7 @@
         (is (false? (core/verify-key pepper tok-map db-row now)))))
 
     (testing "Zero-Downtime Rotation: Grace Match Success"
-      (let [;; Token is V2 (from tok-map), DB is V3
+      (let [ ;; Token is V2 (from tok-map), DB is V3
             db-row {:hash (byte-array 64)
                     :rotation-version 3
                     :prev-hash valid-hash
