@@ -2,11 +2,9 @@
   (:require
    [ring.util.response :as resp]
    [ring.util.codec :as rcodec]
-
-   [turvata.core :refer [authenticate-browser-token]]
-   [turvata.catalog :as cat]
+   [turvata.core :as core]
+   [turvata.keys :as k]
    [turvata.session :as sess]
-   [turvata.keys :as keys]
    [turvata.ring.util :refer [clear-cookie-attrs ms->s cookie-attrs]]
    [turvata.schema :as s]
 
@@ -16,15 +14,12 @@
 
 (set! *warn-on-reflection* true)
 
-(defn make-logged-in?-handler
-  "Return the current session auth map (e.g. {:user-id ...}) if the request is
-  already authenticated via the session cookie, else nil. Not a Ring response."
-  [env]
+(defn make-logged-in?-handler [env]
   (fn [request]
-    (let [cookie-name   (get-in env     [:settings :cookie-name])
-          cookie-token  (get-in request [:cookies cookie-name :value])]
+    (let [cookie-name  (get-in env [:settings :cookie-name])
+          cookie-token (get-in request [:cookies cookie-name :value])]
       (when cookie-token
-        (authenticate-browser-token env cookie-token)))))
+        (sess/authenticate-browser-token env cookie-token)))))
 
 (defn make-login-handler
   "POST handler that validates username+token against the TokenCatalog, creates
@@ -35,22 +30,25 @@
   [env]
   (fn [request]
     (with-schema s/TurvataLogin request
-      (let [{:keys [catalog store settings]} env
+      (let [{:keys [store settings]} env
             {:keys [username token next]} (:params request)
-            token!!       token
+            raw-token!!   token
 
             cookie        (:cookie-name settings)
             ttl-ms        (:session-ttl-ms settings)
             post-login    (:post-login-redirect settings)
             redirect-to   (or next post-login)
 
-            ;; already auth'd?
-            cookie-token  (get-in request [:cookies cookie :value])
-            already       (when cookie-token
-                            (authenticate-browser-token env cookie-token))
-            ;; catalog lookup
-            user-id       (when token!! (cat/lookup-user-id catalog token!! request))
-            ok?           (and user-id username (= username (str user-id)))]
+            ;; Already auth'd?
+            cookie-token (get-in request [:cookies cookie :value])
+            already      (when cookie-token
+                           (sess/authenticate-browser-token env cookie-token))
+
+            ;; 1. V2 Token Cryptographic Verification
+            valid-login?
+            (let [user-id (core/authenticate-api-token raw-token!! env request)]
+              (and (some? user-id)
+                   (= username user-id)))]
 
         (cond
           ;; Already logged in → act like a successful login and redirect
@@ -59,11 +57,12 @@
               cc/with-nostore)
 
           ;; Valid credentials → create session, set cookie, redirect
-          ok?
-          (let [session-token  (-> (keys/generate-token) :token!!)
-                expires-at     (+ (sess/now-ms) ttl-ms)
-                max-age        (ms->s (have pos? ttl-ms))
-                cookie-attrs   (assoc (cookie-attrs settings request) :max-age max-age)]
+          valid-login?
+          (let [session-token (k/generate-session-token)
+                expires-at    (+ (sess/now-ms) ttl-ms)
+                max-age       (ms->s (have pos? ttl-ms))
+                cookie-attrs  (assoc (cookie-attrs settings request) :max-age max-age)]
+
             (sess/put-entry! store session-token {:user-id username :expires-at expires-at})
             (-> (resp/redirect redirect-to 303) ;; See Other after POST
                 (resp/set-cookie cookie session-token cookie-attrs)

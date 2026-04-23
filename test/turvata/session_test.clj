@@ -1,8 +1,9 @@
 (ns turvata.session-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [turvata.core :refer [authenticate-browser-token]]
    [turvata.session :as s]))
+
+(set! *warn-on-reflection* true)
 
 (deftest store-roundtrip-test
   (let [store (s/in-memory-store)
@@ -84,12 +85,12 @@
       (testing "more than half remaining -> no refresh"
         (with-redefs [s/now-ms (constantly (+ base (dec half)))]  ;; just before half
           (is (= {:user-id "alice" :refreshed? false :expires-at (+ base ttl)}
-                 (authenticate-browser-token env tok)))))
+                 (s/authenticate-browser-token env tok)))))
 
       (testing "half or less remaining -> refresh"
         (with-redefs [s/now-ms (constantly (+ base half 1))]      ;; just past half
           (let [now (s/now-ms)
-                out (authenticate-browser-token env tok)]
+                out (s/authenticate-browser-token env tok)]
             (is (:refreshed? out))
             ;; refreshed expiry should be recomputed from "now"
             (is (= (+ now ttl) (:expires-at out)))))))))
@@ -99,16 +100,16 @@
         env   {:store store :settings {:session-ttl-ms 60000}}]
 
     (testing "Fails closed on missing or blank tokens"
-      (is (nil? (authenticate-browser-token env nil)))
-      (is (nil? (authenticate-browser-token env "")))
-      (is (nil? (authenticate-browser-token env "   "))))
+      (is (nil? (s/authenticate-browser-token env nil)))
+      (is (nil? (s/authenticate-browser-token env "")))
+      (is (nil? (s/authenticate-browser-token env "   "))))
 
     (testing "Fails closed on unknown tokens"
-      (is (nil? (authenticate-browser-token env "does-not-exist"))))
+      (is (nil? (s/authenticate-browser-token env "does-not-exist"))))
 
     (testing "Fails closed on strictly expired tokens"
       (let [base (s/now-ms)]
         ;; Insert a token that expired 1ms ago
         (s/put-entry! store "expired-tok" {:user-id "bob" :expires-at (- base 1)})
         (with-redefs [s/now-ms (constantly base)]
-          (is (nil? (authenticate-browser-token env "expired-tok"))))))))
+          (is (nil? (s/authenticate-browser-token env "expired-tok"))))))))

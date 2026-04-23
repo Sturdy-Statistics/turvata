@@ -5,7 +5,7 @@
 **Verb** ([Finnish](https://translate.google.com/?sl=fi&tl=en&text=turvata&op=translate)):
 secure, safeguard, ensure, assure, defend, indemnify, insure, cover
 
-**Minimal, explicit authentication helpers for Clojure Ring applications.**
+**Strict, explicit authentication boundaries for Clojure Ring applications.**
 
 `turvata` provides a small set of primitives for:
 
@@ -14,26 +14,38 @@ secure, safeguard, ensure, assure, defend, indemnify, insure, cover
 - A simple **closure-based environment model** (allowing multiple isolated auth zones per app)
 - Safe defaults, explicit failure modes, and minimal abstraction
 
-It is designed for **internal tools and admin portals**, not consumer-facing auth.
+It is designed for **internal tools, admin portals, and service-to-service communication**, not consumer-facing auth.
 
 Turvata was originally developed to meet the internal security and operational requirements of **Sturdy Statistics**.
 It is published as open source to support transparency, auditability, and reuse, but its design is intentionally conservative and driven by real production needs.
 We may not accept feature requests that dilute its focus.
 
 > [!WARNING]
+> **NOTE** v0.3.0 represents a severe breaking change from v0.2.x.
+> `turvata` abandoned simple SHA-256 token hashes in favor of cryptographically bound HMAC-SHA512 tokens with structural context. All `user-id`s must now be `java.util.UUID`. V1 tokens are no longer supported.
+>
 > **NOTE** v0.2.0 represents a breaking change from v0.1.x.
 > `turvata` moved from a runtime-based model to a closure-based model
 
 ## Design goals
 
 - **Explicit**:
-  Authentication behavior should be easy to read in code.
+  Configuration and authentication behavior should be easy to read in code.
 
 - **Deny by default**:
   Missing or invalid credentials never authenticate.
 
+- **Defense in Depth**:
+  Database compromises should not lead to system breaches.  Crypto logic is isolated from database storage.
+
 - **High-entropy secrets**:
   Tokens are assumed to be random secrets, not user-chosen passwords.
+
+- **Closed World Validation**:
+  Malformed data is dropped immediately.  The system only reasons about data it explicitly expects.
+
+- **Zero-Downtime Rotation**:
+  Built-in support for sliding grace periods across credential rotations.
 
 - **Minimal dependencies and configuration**
 
@@ -42,7 +54,7 @@ We may not accept feature requests that dilute its focus.
 `turvata` does **not** provide:
 
 - OAuth / OpenID Connect
-- Password hashing or password login
+- Password hashing or user-chosen passwords
 - User management, signup, or recovery
 - CSRF protection (delegate to your app)
 - Distributed session replication (pluggable store only)
@@ -59,37 +71,35 @@ Add to `deps.edn`:
 
 ### Tokens
 
-- Tokens are **high-entropy random strings**.
-- The server stores **only hashes** of tokens.
-- Clients present raw tokens.
-- Token lookup is `token → user-id`.
+- API Tokens are **high-entropy, 52-byte structures** encoding an opaque UUID, a rotation version, a secure random secret, and a CRC32 checksum.
+- Tokens are **cryptographically bound** using a backend pepper. An attacker with full database write access cannot bypass authentication because they do not possess the memory-bound pepper.
+- The server stores the expected hashes, rotation versions, and expiration timestamps.
+- Token lookup is strictly `user-id-uuid → database-record`.
 
-Generate tokens using `turvata.keys/generate-token`:
+Generate tokens using `turvata.codec/generate-token!!`:
 
 ```clojure
-(require '[turvata.keys :as keys])
+(require '[turvata.codec :as codec])
 
-(keys/generate-token)
-;; => {:token "...", :hashed "..."}
+(codec/generate-token!! {:prefix "svc" :rotation-version 1 :user-id #uuid "..."})
+;; => "svc_020001_BASE32STRING..."
 ```
 
-Store `:hashed` in your catalog; give `:token` to the client.
+Store the token in the client.
+Compute the expected hash using `turvata.crypto/hash-key` to store in your catalog.
 
 ### Token catalogs
 
-A `TokenCatalog` maps a bearer token to a user identifier.
-Tokens are hashed before lookup; catalogs should store hashes, not raw tokens (except in tests).
+A `TokenCatalog` maps a `user-id` UUID to a database record map.
+Because the crypto runs in memory after the database lookup, catalogs are strictly responsible for data retrieval, not evaluation.
 
 Provided implementations:
 
 ```clojure
 (require '[turvata.catalog :as cat])
 
-(cat/hashed-map-catalog
-  {"<hashed-token>" "alice"})
-
-(cat/plain-map-catalog
-  {"raw-token" "alice"})
+(cat/in-memory-catalog
+  {#uuid "..." {:hash #bytes "..." :rotation-version 1}})
 
 (cat/edn-file-catalog "tokens.edn")
 
@@ -98,7 +108,8 @@ Provided implementations:
 
 ### Session store
 
-Browser sessions are stored server-side via a `SessionStore`.
+Browser sessions are ephemeral, stateful, and stored server-side via a `SessionStore`.
+They use simple, secure 32-byte strings rather than full V2 API tokens.
 
 Provided implementation:
 
@@ -114,14 +125,20 @@ Provided implementation:
 You configure an "environment" map and pass it to middleware and handler factories. 
 This allows you to run completely isolated authentication zones (e.g., a Web Admin portal and a Public API) in the same application.
 
+**V2 requires a high-entropy `byte[]` pepper and a token prefix.**
+
 ```clojure
 (require
   '[turvata.settings :as settings]
   '[turvata.session :as sess]
   '[turvata.catalog :as cat])
 
+(def pepper-bytes (byte-array ...)) ;; Must be at least 32 bytes
+
 (def web-env
-  {:settings (settings/normalize {:cookie-name "myapp-session"
+  {:settings (settings/normalize {:pepper pepper-bytes
+                                  :prefix "myapp"
+                                  :cookie-name "myapp-session"
                                   :session-ttl-ms (* 4 60 60 1000)
                                   :login-url "/login"})
    :catalog  my-token-catalog
@@ -137,26 +154,27 @@ Middleware functions are created by calling a factory with your environment map.
 ```clojure
 (require '[turvata.ring.middleware :as mw])
 
-(def require-api-auth (mw/wrap-api-auth api-env))
+(def require-api-auth (mw/require-api-auth api-env))
 
 (require-api-auth handler)
 ```
 
-- Expects `Authorization: Bearer <token>`
-- On success: associates `:user-id` in the request
-- On failure: returns `401 Unauthorized`
+- Expects `Authorization: Bearer <v2-token>`
+- Fails fast on bad checksums, malformed strings, or missing peppers.
+- On success: associates `:user-id` (a `java.util.UUID`) in the request.
+- On failure: returns `401 Unauthorized` with `no-store` headers.
 
 ### Web (session) authentication
 
 ```clojure
-(def require-web-auth (mw/wrap-web-auth web-env))
+(def require-web-auth (mw/require-web-auth web-env))
 
 (require-web-auth handler)
 ```
 
-- On success: associates `:user-id` in the request
-- Refreshes the cookie when nearing expiry
-- On failure: redirects to `:login-url` with `?next=...`
+- On success: associates `:user-id` in the request.
+- Refreshes the cookie when nearing expiry (sliding sessions).
+- On failure: aggressively clears the cookie and redirects to `:login-url` with `?next=...`.
 
 ## Login and logout handlers
 
@@ -174,9 +192,11 @@ Handlers are also created via factories.
 
 Expected form params:
 
-- `username`
-- `token`
+- `username` (Must match the `user-id` UUID embedded in the provided token)
+- `token` (A valid V2 API Token)
 - `next` (optional, relative path)
+
+On success, validates the V2 token and mints a stateful browser session cookie.
 
 ### Logout
 
@@ -195,10 +215,11 @@ The README file in that directory explains how to run and use the app.
 
 These notes describe the intended security model and assumptions of `turvata`.
 
-- Tokens **must be high-entropy random secrets**
-- Token hashes use SHA-256
-- Open redirects are prevented
-- Forwarded HTTPS headers should only be trusted behind a proxy
+- **Closed World Validation:** Uses `malli` to enforce rigorous schemas at the edge. Unknown keys are stripped, malformed inputs are rejected immediately.
+- **Context Binding:** Hashes are bound to the `user-id` and `rotation-version` to prevent database swapping.
+- **Constant Time Evaluation:** Uses `MessageDigest/isEqual` to mitigate timing attacks.
+- **Rollback Resistance:** Grace periods are explicitly limited to `(dec current-version)`.
+- Open redirects are structurally prevented.
 
 ## License
 

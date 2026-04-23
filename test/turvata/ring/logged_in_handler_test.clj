@@ -4,12 +4,17 @@
    [ring.mock.request :as mock]
    [turvata.settings :as settings]
    [turvata.session  :as sess]
-   [turvata.ring.handlers :as h]))
+   [turvata.ring.handlers :as h]
+   [turvata.test-support :as ts]))
+
+(set! *warn-on-reflection* true)
 
 (defn- make-env []
   {:store (sess/in-memory-store)
-   :settings (settings/normalize {:session-ttl-ms 60000
-                                  :cookie-name "test-cookie"})})
+   :settings (settings/normalize
+              (merge ts/test-settings
+                     {:session-ttl-ms 60000
+                      :cookie-name "test-cookie"}))})
 
 (deftest logged-in-missing-cookie-returns-nil
   (let [env  (make-env)

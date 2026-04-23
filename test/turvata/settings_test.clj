@@ -1,7 +1,10 @@
 (ns turvata.settings-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [turvata.settings :as s]))
+   [turvata.settings :as s]
+   [turvata.test-support :as ts]))
+
+(set! *warn-on-reflection* true)
 
 (deftest default-https-test
   (testing "basic scheme"
@@ -29,22 +32,38 @@
 
 (deftest normalize-test
   (testing "merges with sane defaults"
-    (let [env (s/normalize {})]
+    (let [env (s/normalize ts/test-settings)]
       (is (= "turvata-web-token" (:cookie-name env)))
       (is (= (* 4 60 60 1000) (:session-ttl-ms env)))
       (is (= :lax (:same-site env)))
       (is (= "/auth/login" (:login-url env)))
-      (is (= s/default-https? (:https? env)))))
+      (is (= s/default-https? (:https? env)))
+      (is (= "sturdy-test" (:prefix env)))
+      (is (bytes? (:pepper env)))))
 
   (testing "allows valid overrides"
-    (let [env (s/normalize {:cookie-name "sturdy-admin"
-                            :session-ttl-ms 60000
-                            :same-site :strict
-                            :login-url "/custom-login"})]
-      (is (= "sturdy-admin" (:cookie-name env)))
-      (is (= 60000 (:session-ttl-ms env)))
-      (is (= :strict (:same-site env)))
+    (let [env (s/normalize (merge ts/test-settings
+                                  {:cookie-name    "sturdy-admin"
+                                   :session-ttl-ms 60000
+                                   :same-site      :strict
+                                   :login-url      "/custom-login"}))]
+      (is (= "sturdy-admin"  (:cookie-name env)))
+      (is (= 60000           (:session-ttl-ms env)))
+      (is (= :strict         (:same-site env)))
       (is (= "/custom-login" (:login-url env)))))
+
+  (testing "malli strictly rejects invalid pepper and prefix"
+    ;; Missing required crypto configs
+    (is (thrown? Exception (s/normalize {})))
+    (is (thrown? Exception (s/normalize {:prefix "test"})))
+
+    ;; Pepper entropy failures (too short, or a string instead of byte[])
+    (is (thrown? Exception (s/normalize {:pepper (byte-array 16) :prefix "test"})))
+    (is (thrown? Exception (s/normalize {:pepper "this-is-a-string-not-a-byte-array" :prefix "test"})))
+
+    ;; Prefix constraint failures (no underscores allowed!)
+    (is (thrown? Exception (s/normalize {:pepper ts/test-pepper-bytes :prefix "sturdy_admin"})))
+    (is (thrown? Exception (s/normalize {:pepper ts/test-pepper-bytes :prefix "sturdy admin"}))))
 
   (testing "malli strictly rejects invalid configurations"
     ;; Blank/nil cookie names
