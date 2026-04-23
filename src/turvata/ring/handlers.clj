@@ -22,7 +22,7 @@
         (sess/authenticate-browser-token env cookie-token)))))
 
 (defn make-login-handler
-  "POST handler that validates username+token against the TokenCatalog, creates
+  "POST handler that validates user-id+token against the TokenCatalog, creates
   a new session in the SessionStore, sets the session cookie, and redirects.
 
   Redirect target is taken from the :next param (relative paths only) or falls
@@ -31,7 +31,7 @@
   (fn [request]
     (with-schema s/TurvataLogin request
       (let [{:keys [store settings]} env
-            {:keys [username token next]} (:params request)
+            {:keys [user-id token next]} (:params request)
             raw-token!!   token
 
             cookie        (:cookie-name settings)
@@ -46,9 +46,9 @@
 
             ;; 1. V2 Token Cryptographic Verification
             valid-login?
-            (let [user-id (core/authenticate-api-token raw-token!! env request)]
-              (and (some? user-id)
-                   (= username user-id)))]
+            (let [user-id' (core/authenticate-api-token raw-token!! env request)]
+              (and (some? user-id')
+                   (= user-id user-id')))]
 
         (cond
           ;; Already logged in → act like a successful login and redirect
@@ -63,7 +63,7 @@
                 max-age       (ms->s (have pos? ttl-ms))
                 cookie-attrs  (assoc (cookie-attrs settings request) :max-age max-age)]
 
-            (sess/put-entry! store session-token {:user-id username :expires-at expires-at})
+            (sess/put-entry! store session-token {:user-id user-id :expires-at expires-at})
             (-> (resp/redirect redirect-to 303) ;; See Other after POST
                 (resp/set-cookie cookie session-token cookie-attrs)
                 cc/with-nostore))

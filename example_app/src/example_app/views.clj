@@ -18,7 +18,7 @@
      (when error [:p {:style "color:red"} (str "Error: " error)])
      [:form {:method "POST" :action "/auth/login"}
       (anti-forgery-field)
-      [:p [:label "User ID (UUID): " [:br] [:input {:name "username" :size 40}]]]
+      [:p [:label "User ID (UUID): " [:br] [:input {:name "user-id" :size 40}]]]
       [:p [:label "Token (V2): "     [:br] [:input {:name "token" :size 60}]]]
       (when next [:input {:type "hidden" :name "next" :value next}])
       [:button {:type "submit"} "Login"]])))

@@ -42,7 +42,7 @@
         req  (-> (mock/request :post "/auth/login")
                  (mock/header "content-type" "application/x-www-form-urlencoded")
                  (mock/body (rcodec/form-encode
-                             {"username" (str test-uuid)
+                             {"user-id"  (str test-uuid)
                               "token"    test-token-str})))
         resp (app req)]
     (is (= 303 (:status resp)))
@@ -56,7 +56,7 @@
         ;; valid format, but it doesn't exist in the mock DB
         bad-tok (codec/generate-token!! {:prefix "sturdy-test" :rotation-version 1 :user-id (random-uuid)})
         request (-> (mock/request :post "/auth/login")
-                    (assoc :params {"username" (str test-uuid) "token" bad-tok}))
+                    (assoc :params {"user-id" (str test-uuid) "token" bad-tok}))
         resp    (handler request)]
 
     (is (= 303 (:status resp)))
@@ -68,7 +68,7 @@
         req  (-> (mock/request :post "/auth/login")
                  (mock/header "content-type" "application/x-www-form-urlencoded")
                  (mock/body (rcodec/form-encode
-                             {"username" (str test-uuid)
+                             {"user-id"  (str test-uuid)
                               "token"    test-token-str
                               "next"     "/reports?page=2"})))
         resp (app req)]
@@ -83,7 +83,7 @@
     (sess/put-entry! (:store env) token {:user-id "alice" :expires-at (+ now 60000)})
 
     (let [req  (-> (mock/request :post "/auth/login")
-                   (assoc :params {"username" test-uuid "token" test-token-str})
+                   (assoc :params {"user-id" test-uuid "token" test-token-str})
                    (assoc :cookies {"test-cookie" {:value token}}))
           resp (handler req)]
       (is (= 303 (:status resp)))
@@ -93,7 +93,7 @@
   (let [env     (make-env)
         handler (h/make-login-handler env)
         req     (-> (mock/request :post "/auth/login")
-                    (assoc :params {"username" (str test-uuid)
+                    (assoc :params {"user-id"  (str test-uuid)
                                     "token"    test-token-str
                                     "next"     "https://evil-phishing-site.com"}))
         resp    (handler req)]
@@ -108,7 +108,7 @@
                      (mock/header "content-type" "application/x-www-form-urlencoded")
                      (mock/body (rcodec/form-encode
                                  {junk-key   "val"
-                                  "username" (str test-uuid)
+                                  "user-id"  (str test-uuid)
                                   "token"    test-token-str})))
         resp     (app req)]
 

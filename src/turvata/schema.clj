@@ -71,7 +71,7 @@
 
 (def TurvataLogin
   [:map {:closed true}
-   [:username :uuid]
+   [:user-id  :uuid]
    [:token    NonBlankString]
 
    [:next     {:optional true} RelativeURI]
