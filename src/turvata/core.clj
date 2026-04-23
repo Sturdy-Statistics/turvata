@@ -1,43 +1,60 @@
 (ns turvata.core
   (:require
-   [turvata.session :as sess]
-   [taoensso.truss :refer [have]]))
+   [turvata.codec :as codec]
+   [turvata.crypto :as crypto]
+   [turvata.catalog :as cat])
+  (:import
+   (java.time Instant)))
 
 (set! *warn-on-reflection* true)
 
-(defn authenticate-browser-token
-  "Authenticate a browser session token.
+;; Expose the parser so consumers don't need to require codec directly
+(def parse-token!! codec/parse-token!!)
+(def generate-token!! codec/generate-token!!)
 
-   Given a session token (e.g. from a cookie), returns a map on success:
-   {:user-id <string> :expires-at <ms> :refreshed? <boolean>}
+(defn- unexpired? [^Instant now ^Instant expires-at]
+  (if (nil? expires-at)
+    true ;; Tokens without an expiration are immortal
+    (.isBefore now expires-at)))
 
-   Authentication succeeds if the token exists and is not expired.
-   If session TTL is positive, the expiration is refreshed when remaining TTL
-   is at or below 50%. If TTL is non-positive, the token is never refreshed.
+(defn verify-key
+  "Evaluates a parsed token against its database state to determine validity.
+   Returns :valid/primary, :valid/grace, or false."
+  [^bytes pepper!! token-map db-row ^Instant now]
+  (let [computed-hash!! (crypto/hash-key pepper!! token-map)
+        token-version   (int (:rotation-version token-map))
+        db-version      (int (:rotation-version db-row))
 
-   Returns nil if the token is missing, unknown, or expired."
-  [env token!!]
-  (let [{:keys [store settings]} env
-        now                      (sess/now-ms)]
-    (when-let [{:keys [user-id expires-at]}
-               (and (not-empty token!!)
-                    (sess/get-entry store token!!))]
-      (when (> expires-at now)
-        (let [ttl       (:session-ttl-ms settings)
-              remaining (- expires-at now)]
-          (if (pos? ttl)
-            (if (<= remaining (quot ttl 2))
-              ;; refresh
-              (let [new-exp (+ now ttl)
-                    touched (sess/touch! store token!! new-exp)]
-                {:user-id user-id
-                 :expires-at (have integer? (:expires-at touched)) ; read back what store wrote
-                 :refreshed? true})
-              ;; no refresh
-              {:user-id user-id
-               :expires-at expires-at
-               :refreshed? false})
-            ;; ttl <= 0 → never refresh, but still authenticate
-            {:user-id user-id
-             :expires-at expires-at
-             :refreshed? false}))))))
+        ;; 1. Check Primary Match
+        primary-match?
+        (and (= token-version db-version)
+             (crypto/constant-time-eq? computed-hash!! ^bytes (:hash db-row))
+             (unexpired? now (:expires-at db-row)))
+
+        ;; 2. Check Grace Match for Zero-Downtime Rotation
+        grace-match?
+        (and (:prev-hash db-row)
+             (:grace-period-expires-at db-row)
+             (= token-version (dec db-version))
+             (crypto/constant-time-eq? computed-hash!! ^bytes (:prev-hash db-row))
+             (unexpired? now (:grace-period-expires-at db-row)))]
+
+    (cond
+      primary-match? :valid/primary
+      grace-match?   :valid/grace
+      :else          false)))
+
+(defn authenticate-api-token
+  "returns user-id or nil"
+  [raw-token!! env request]
+  (try
+    (let [token-map (:token-map (codec/parse-token!! raw-token!!))
+          user-id   (:user-id token-map)
+          db-row    (cat/lookup-record (:catalog env) user-id request)
+          pepper    (get-in env [:settings :pepper])
+          now       (Instant/now)]
+      (when (and db-row (verify-key pepper token-map db-row now))
+        user-id))
+    (catch Exception _
+      ;; Catches malformed strings, bad checksums, or bad versions
+      nil)))

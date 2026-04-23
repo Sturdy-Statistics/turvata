@@ -5,9 +5,8 @@
    [ring.util.response :as resp]
    [ring.util.codec :as rcodec]
 
-   [turvata.core :refer [authenticate-browser-token]]
+   [turvata.core :as core]
    [turvata.session :as s]
-   [turvata.catalog :as c]
 
    [turvata.ring.util :refer [clear-cookie-attrs ms->s cookie-attrs]]
 
@@ -18,38 +17,36 @@
 
 (def ^:private bearer-re #"(?i)^(?:Bearer|Token)\s+(.+)\s*$")
 
-(defn require-api-auth
-  "Ring middleware that requires an API token in the Authorization header.
+(defn- unauthorized-response [message]
+  (-> (resp/response {:error "Unauthorized" :message message})
+      (resp/status 401)
+      (resp/header "WWW-Authenticate" "Bearer realm=\"turvata\", error=\"invalid_token\"")
+      cc/with-nostore
+      (resp/header "Vary" "Authorization")))
 
-  Expects: Authorization: Bearer <token> (also accepts Token <token>).
-  On success, assoc :user-id in the request.
-  On failure, returns 401 with WWW-Authenticate and Cache-Control: no-store."
+(defn require-api-auth
+  "Ring middleware that requires a valid V2 API token in the Authorization header.
+   Parses the token, fetches the DB record via UUID, and validates the HMAC signature."
   [env]
   (fn [handler]
     (fn [request]
       (let [auth-header (get-in request [:headers "authorization"])
-            token!!     (some->> auth-header
+            raw-token!! (some->> auth-header
                                  (re-find bearer-re)
                                  second
                                  string/trim
-                                 not-empty)
-            user-id     (when token!! (c/lookup-user-id (:catalog env) token!! request))]
-        (if-not user-id
-          (-> (resp/response {:error "Unauthorized"
-                              :message "Request lacks valid authentication credentials for the requested resource"})
-              (resp/status 401)
-              (resp/header "WWW-Authenticate" "Bearer realm=\"turvata\", error=\"invalid_token\"")
-              cc/with-nostore
-              (resp/header "Vary" "Authorization"))
-          (handler (assoc request :user-id user-id)))))))
+                                 not-empty)]
+        (if-not raw-token!!
+          (unauthorized-response "Request lacks authentication credentials")
+
+          (let [auth-result (core/authenticate-api-token raw-token!! env request)]
+            (if auth-result
+              (handler (assoc request :user-id auth-result))
+              (unauthorized-response "Invalid token signature, rotation version, or expired key"))))))))
 
 (defn require-web-auth
-  "Ring middleware that requires a valid session cookie.
-
-  Looks up the session token from the configured cookie name.
-  On success, assoc :user-id in the request. May refresh the cookie on response.
-  On failure, clears the cookie and redirects to the configured login URL with
-  a ?next=... parameter for the current request URI."
+  "Ring middleware that requires a valid stateful session cookie.
+   Unchanged structurally, as it relies on turvata.session logic."
   [env]
   (fn [handler]
     (fn [request]
@@ -57,7 +54,7 @@
             cookie-name      (have string? (:cookie-name settings))
             token!!          (get-in request [:cookies cookie-name :value])
             cookie-settings  (cookie-attrs settings request)
-            auth             (authenticate-browser-token env token!!)]
+            auth             (s/authenticate-browser-token env token!!)]
 
         (if-let [{:keys [user-id expires-at refreshed?]} auth]
           ;; authenticated path... nil-preserving!

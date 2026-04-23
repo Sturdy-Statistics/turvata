@@ -41,13 +41,11 @@
 
 (defn normalize
   "Merge user settings with sane defaults and validate.
-   Guarantees:
-   - :cookie-name is a non-blank string
-   - :session-ttl-ms is a non-negative integer
-   - :login-url and :post-login-redirect start with \"/\"
-   - :https? is a callable predicate"
+   Guarantees all required V2 cryptographic parameters are present.
+   Converts the pepper string into a UTF-8 byte array for the crypto engine."
   [settings-in]
   (schema/assert-valid! schema/SettingsIn settings-in)
-  (let [settings  (merge default settings-in)]
-    ;; coerce & validate
-    (schema/assert-valid! schema/Settings settings)))
+
+  (let [settings (merge default settings-in)]
+    (schema/assert-valid! schema/Settings settings)
+    settings))

@@ -1,4 +1,6 @@
-(ns turvata.session)
+(ns turvata.session
+  (:require
+   [taoensso.truss :refer [have]]))
 
 (set! *warn-on-reflection* true)
 
@@ -43,3 +45,40 @@
                     m))
               [_old new] (swap-vals! a f)]
           (get new token))))))
+
+(defn authenticate-browser-token
+  "Authenticate a browser session token.
+
+   Given a session token (e.g. from a cookie), returns a map on success:
+   {:user-id <string> :expires-at <ms> :refreshed? <boolean>}
+
+   Authentication succeeds if the token exists and is not expired.
+   If session TTL is positive, the expiration is refreshed when remaining TTL
+   is at or below 50%. If TTL is non-positive, the token is never refreshed.
+
+   Returns nil if the token is missing, unknown, or expired."
+  [env token!!]
+  (let [{:keys [store settings]} env
+        now                      (now-ms)]
+    (when-let [{:keys [user-id expires-at]}
+               (and (not-empty token!!)
+                    (get-entry store token!!))]
+      (when (> expires-at now)
+        (let [ttl       (:session-ttl-ms settings)
+              remaining (- expires-at now)]
+          (if (pos? ttl)
+            (if (<= remaining (quot ttl 2))
+              ;; refresh
+              (let [new-exp (+ now ttl)
+                    touched (touch! store token!! new-exp)]
+                {:user-id user-id
+                 :expires-at (have integer? (:expires-at touched)) ; read back what store wrote
+                 :refreshed? true})
+              ;; no refresh
+              {:user-id user-id
+               :expires-at expires-at
+               :refreshed? false})
+            ;; ttl <= 0 → never refresh, but still authenticate
+            {:user-id user-id
+             :expires-at expires-at
+             :refreshed? false}))))))

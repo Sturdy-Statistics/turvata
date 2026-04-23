@@ -1,86 +1,75 @@
 (ns turvata.catalog
   (:require
-   [turvata.keys :as k]
-   [sturdy.fs :as sfs]))
+   [sturdy.fs :as sfs]
+   [turvata.util :as u]))
 
 (set! *warn-on-reflection* true)
 
 (defprotocol TokenCatalog
-  (lookup-user-id
-    [this token!!]
-    [this token!! context]
-    "Return user-id (string/keyword) if bearer token is valid.
+  (lookup-record
+    [this user-id-uuid]
+    [this user-id-uuid context]
+    "Returns the database record map for the given user-id UUID, or nil if not found.
+     The returned map must contain:
+     - :hash (byte array)
+     - :rotation-version (integer)
+     - :expires-at (java.time.Instant or nil)
+     Optional keys for zero-downtime rotation:
+     - :prev-hash (byte array)
+     - :grace-period-expires-at (java.time.Instant)
+
      Context is an optional map (e.g. ring request, log data) for auditing."))
 
-(defn hashed-map-catalog
-  "Catalog backed by an in-memory map keyed by hashed tokens.
-
-  Provide {<hash> -> <user-id>} where <hash> matches (k/hash-token token).
-  This avoids storing raw tokens in memory.
-
-  Tokens must be high-entropy (random), not user-chosen."
-  [hashed->user-id]
+(defn in-memory-catalog
+  "Catalog backed by an in-memory map keyed by user-id UUIDs.
+   Provide {<uuid> -> <db-row-map>}. Useful for testing."
+  [uuid->record]
   (reify TokenCatalog
-    (lookup-user-id [_ token!!]
-      (when (string? token!!)
-        (get hashed->user-id (k/hash-token token!!))))
+    (lookup-record [_ user-id-uuid]
+      (when (uuid? user-id-uuid)
+        (get uuid->record user-id-uuid)))
 
-    (lookup-user-id [this token!! _context]
-      (lookup-user-id this token!!))))
-
-(defn plain-map-catalog
-  "Catalog backed by an in-memory map keyed by raw tokens (useful in tests).
-
-  Provide {<raw-token> -> <user-id>}."
-  [token->user-id]
-  (reify TokenCatalog
-    (lookup-user-id [_ token!!]
-      (when (string? token!!)
-        (get token->user-id token!!)))
-
-    (lookup-user-id [this token!! _context]
-      (lookup-user-id this token!!))))
+    (lookup-record [this user-id-uuid _context]
+      (lookup-record this user-id-uuid))))
 
 (defn fn-catalog
-  "Wrap an arbitrary (fn [token!!] -> user-id|nil)."
+  "Wrap an arbitrary (fn [uuid] -> record|nil)."
   [f]
   (reify TokenCatalog
-    (lookup-user-id [_ token!!]
-      (when (string? token!!) (f token!!)))
+    (lookup-record [_ user-id-uuid]
+      (when (uuid? user-id-uuid) (f user-id-uuid)))
 
-    (lookup-user-id [_ token!! context]
-      (when (string? token!!) (f token!! context)))))
+    (lookup-record [_ user-id-uuid context]
+      (when (uuid? user-id-uuid) (f user-id-uuid context)))))
 
 (defn composite
-  "Try multiple catalogs in order; return the first non-nil user-id."
+  "Try multiple catalogs in order; return the first non-nil record."
   [catalogs]
   (let [catalogs' (remove nil? catalogs)]
     (reify TokenCatalog
-      (lookup-user-id [_ token!!]
-        (some #(lookup-user-id % token!!) catalogs'))
+      (lookup-record [_ user-id-uuid]
+        (some #(lookup-record % user-id-uuid) catalogs'))
 
-      (lookup-user-id [_ token!! context]
-        (some #(lookup-user-id % token!! context) catalogs')))))
+      (lookup-record [_ user-id-uuid context]
+        (some #(lookup-record % user-id-uuid context) catalogs')))))
 
 (defn edn-file-catalog
   "EDN-backed catalog.
-
-  File format: a vector of maps [{:hashed \"...\" :user-id \"alice\"} ...].
-  Note: reloads the file on each call; intended for low traffic and small catalogs."
+   File format: [{:user-id #uuid \"...\" :hash-hex \"...\" :rotation-version 1 ...} ...]
+   Note: reloads the file on each call; intended for low traffic endpoints.
+   Automatically converts hex strings to byte arrays for the crypto engine."
   [path]
   (reify TokenCatalog
-    (lookup-user-id [_ token!!]
-      (when (string? token!!)
-        (let [h (k/hash-token token!!)
-              rows (sfs/slurp-edn path)]
-          (some (fn [{:keys [hashed user-id]}]
-                  (when (= hashed h) user-id))
+    (lookup-record [_ user-id-uuid]
+      (when (uuid? user-id-uuid)
+        (let [rows (sfs/slurp-edn path)]
+          (some (fn [row]
+                  (when (= (:user-id row) user-id-uuid)
+                    ;; Hydrate hex strings into byte arrays for the core logic
+                    (cond-> row
+                      (:hash-hex row)      (assoc :hash (u/hex-string->bytes (:hash-hex row)))
+                      (:prev-hash-hex row) (assoc :prev-hash (u/hex-string->bytes (:prev-hash-hex row))))))
                 rows))))
 
-    (lookup-user-id [this token!! _context]
-      (lookup-user-id this token!!))))
-
-(defn valid-token?
-  "Return true if token is valid in catalog, else false."
-  [catalog token!!]
-  (boolean (lookup-user-id catalog token!!)))
+    (lookup-record [this user-id-uuid _context]
+      (lookup-record this user-id-uuid))))
