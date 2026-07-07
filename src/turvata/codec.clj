@@ -105,6 +105,12 @@
 
         versions-str      (format "%02x%04x"
                                   supported-spec-version
-                                  rotation-version)]
+                                  rotation-version)
+        token!!           (str prefix "_" versions-str "_" payload!!)]
 
-    (str prefix "_" versions-str "_" payload!!)))
+    (when (> (count token!!) max-raw-token-length)
+      (throw (ex-info "generated token exceeds maximum length"
+                      {:max-raw-token-length max-raw-token-length
+                       :actual-length (count token!!)})))
+
+    token!!))

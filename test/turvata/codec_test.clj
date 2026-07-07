@@ -81,3 +81,11 @@
                    (codec/generate-token!! {:prefix "a"
                                             :rotation-version rotation-version
                                             :user-id (random-uuid)}))))))
+
+(deftest generation-rejects-oversized-token-test
+  (testing "Rejects generated tokens that would exceed the parser's raw length cap"
+    (let [oversized-prefix (apply str (repeat 4010 "a"))]
+      (is (thrown? Exception
+                   (codec/generate-token!! {:prefix oversized-prefix
+                                            :rotation-version 1
+                                            :user-id (random-uuid)}))))))
