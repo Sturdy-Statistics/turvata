@@ -192,7 +192,7 @@ Handlers are also created via factories.
 
 Expected form params:
 
-- `username` (Must match the `user-id` UUID embedded in the provided token)
+- `user-id` (Must match the UUID embedded in the provided token)
 - `token` (A valid V2 API Token)
 - `next` (optional, relative path)
 
