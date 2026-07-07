@@ -1,8 +1,11 @@
 (ns turvata.core-test
   (:require
    [clojure.test :refer [deftest is testing]]
+   [turvata.catalog :as cat]
+   [turvata.codec :as codec]
    [turvata.core :as core]
    [turvata.crypto :as crypto]
+   [turvata.settings :as settings]
    [turvata.test-support :as ts])
   (:import
    (java.time Instant)))
@@ -52,3 +55,16 @@
                     :prev-hash valid-hash
                     :grace-period-expires-at past}]
         (is (false? (core/verify-key pepper tok-map db-row now)))))))
+
+(deftest authenticate-api-token-rejects-prefix-mismatch-test
+  (let [user-id   (random-uuid)
+        token!!   (codec/generate-token!! {:prefix "other-svc"
+                                           :rotation-version 1
+                                           :user-id user-id})
+        token-map (codec/parse-token!! token!!)
+        catalog   (cat/in-memory-catalog
+                   {user-id {:hash (crypto/hash-key ts/test-pepper-bytes token-map)
+                             :rotation-version 1}})
+        env       {:catalog catalog
+                   :settings (settings/normalize ts/test-settings)}]
+    (is (nil? (core/authenticate-api-token token!! env {})))))

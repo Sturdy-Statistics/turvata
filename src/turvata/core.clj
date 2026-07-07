@@ -1,5 +1,6 @@
 (ns turvata.core
   (:require
+   [clojure.string :as string]
    [turvata.codec :as codec]
    [turvata.crypto :as crypto]
    [turvata.catalog :as cat])
@@ -48,11 +49,14 @@
   [raw-token!! env request]
   (try
     (let [token-map (codec/parse-token!! raw-token!!)
+          prefix    (some-> (get-in env [:settings :prefix]) string/lower-case)
           user-id   (:user-id token-map)
           db-row    (cat/lookup-record (:catalog env) user-id request)
           pepper    (get-in env [:settings :pepper])
           now       (Instant/now)]
-      (when (and db-row (verify-key pepper token-map db-row now))
+      (when (and (= prefix (:prefix token-map))
+                 db-row
+                 (verify-key pepper token-map db-row now))
         user-id))
     (catch Exception _
       ;; Catches malformed strings, bad checksums, or bad versions

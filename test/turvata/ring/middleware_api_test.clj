@@ -102,4 +102,20 @@
             resp (app (-> (mock/request :get "/api/secure")
                           (mock/header "authorization" (str "Bearer " unknown-tok))))]
         (is (= 401 (:status resp)))
-        (is (= "Unauthorized" (get-in resp [:body :error])))))))
+        (is (= "Unauthorized" (get-in resp [:body :error]))))))
+
+  (testing "Rejects valid tokens from a different prefix"
+    (let [user-id   (random-uuid)
+          token!!   (codec/generate-token!! {:prefix "other-svc"
+                                             :rotation-version 1
+                                             :user-id user-id})
+          token-map (codec/parse-token!! token!!)
+          catalog   (cat/in-memory-catalog
+                     {user-id {:hash (crypto/hash-key ts/test-pepper-bytes token-map)
+                               :rotation-version 1}})
+          env       {:catalog catalog :settings (settings/normalize ts/test-settings)}
+          app       ((mw/require-api-auth env) echo-user-id)
+          resp      (app (-> (mock/request :get "/api/secure")
+                             (mock/header "authorization" (str "Bearer " token!!))))]
+      (is (= 401 (:status resp)))
+      (is (= "Unauthorized" (get-in resp [:body :error]))))))
