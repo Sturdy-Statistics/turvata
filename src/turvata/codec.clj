@@ -10,14 +10,20 @@
 
 (set! *warn-on-reflection* true)
 
-(def ^:private
-  ^SecureRandom secure-random
-  (SecureRandom.))
-
-(def ^:private max-token-length 4096)
+(def ^:private ^SecureRandom secure-random (SecureRandom.))
+(def ^:private token-pattern #"^[a-zA-Z0-9\-]+_[0-9a-fA-F]{6}_[a-zA-Z2-7]+$")
+(def ^:private max-raw-token-length 4096)
+(def ^:private supported-spec-version 2)
 
 (defn- valid-rotation-version? [v]
   (and (nat-int? v) (<= v 0xffff)))
+
+(defn- validate-generation-version!
+  [rotation-version]
+  (when-not (valid-rotation-version? rotation-version)
+    (throw (ex-info "invalid token version"
+                    {:spec-version supported-spec-version
+                     :rotation-version rotation-version}))))
 
 (defn- nonce
   ^bytes [^long length]
@@ -30,10 +36,10 @@
    Fails fast on checksum mismatch or structural invalidity."
   [raw-token!!]
   (try
-    (when-not (<= (count raw-token!!) max-token-length)
+    (when (> (count raw-token!!) max-raw-token-length)
       (u/throw-400!))
 
-    (when-not (re-matches #"^[a-zA-Z0-9\-]+_[0-9a-fA-F]{6}_[a-zA-Z2-7]+$" raw-token!!)
+    (when-not (re-matches token-pattern raw-token!!)
       (u/throw-400!))
 
     (let [normalized-token  (str/lower-case raw-token!!)
@@ -49,10 +55,9 @@
 
             payload-bytes     (u/b32->bytes ^String encoded-payload!!)]
 
-        (when-not (= 2 spec-version) ;; Enforce V2 explicitly
+        (when-not (= supported-spec-version spec-version)
           (u/throw-400!))
 
-        ;; should be precisely 52 bytes
         (when-not (= 52 (alength ^bytes payload-bytes))
           (u/throw-400!))
 
@@ -62,9 +67,9 @@
 
           (u/verify-checksum! raw-data!! expected-checksum)
 
-          (let [user-id-bytes (Arrays/copyOfRange raw-data!! 0 16)
+          (let [user-id-bytes (Arrays/copyOfRange ^bytes raw-data!! 0 16)
                 user-id-uuid  (u/bytes->uuid user-id-bytes)
-                secret!!      (Arrays/copyOfRange raw-data!! 16 48)]
+                secret!!      (Arrays/copyOfRange ^bytes raw-data!! 16 48)]
 
             {:prefix           prefix
              :spec-version     spec-version
@@ -78,6 +83,7 @@
 (defn generate-token!!
   "Generates a structurally sound V2 token string and payload."
   [{:keys [prefix rotation-version user-id]}]
+  (validate-generation-version! rotation-version)
   (let [prefix            (have string? prefix)
         user-id-bytes     (u/uuid->bytes (have uuid? user-id))
         secret!!          (nonce 32)
@@ -97,7 +103,8 @@
 
         payload!!         (u/bytes->b32 payload-bytes!!)
 
-        ;; V2 explicitly hardcoded
-        versions-str      (format "%02x%04x" 2 (have valid-rotation-version? rotation-version))]
+        versions-str      (format "%02x%04x"
+                                  supported-spec-version
+                                  rotation-version)]
 
     (str prefix "_" versions-str "_" payload!!)))

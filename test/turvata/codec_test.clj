@@ -65,17 +65,19 @@
       (is (thrown? Exception (codec/parse-token!! suffixed))))))
 
 (deftest generation-enforces-rotation-version-bounds-test
-  (testing "Generates and parses the maximum 16-bit rotation version"
-    (let [user-id (random-uuid)
-          token!! (codec/generate-token!! {:prefix "a"
-                                           :rotation-version 65535
-                                           :user-id user-id})
-          parsed  (codec/parse-token!! token!!)]
-      (is (= 65535 (:rotation-version parsed)))
-      (is (= user-id (:user-id parsed)))))
+  (testing "Generates and parses the unsigned 16-bit rotation boundaries"
+    (doseq [rotation-version [0 65535]]
+      (let [user-id (random-uuid)
+            token!! (codec/generate-token!! {:prefix "a"
+                                             :rotation-version rotation-version
+                                             :user-id user-id})
+            parsed  (codec/parse-token!! token!!)]
+        (is (= rotation-version (:rotation-version parsed)))
+        (is (= user-id (:user-id parsed))))))
 
-  (testing "Rejects rotation versions too large for the token format"
-    (is (thrown? Exception
-                 (codec/generate-token!! {:prefix "a"
-                                          :rotation-version 65536
-                                          :user-id (random-uuid)})))))
+  (testing "Rejects rotation versions outside the unsigned 16-bit range"
+    (doseq [rotation-version [-1 65536]]
+      (is (thrown? Exception
+                   (codec/generate-token!! {:prefix "a"
+                                            :rotation-version rotation-version
+                                            :user-id (random-uuid)}))))))
