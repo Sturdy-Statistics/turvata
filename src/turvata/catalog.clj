@@ -42,6 +42,16 @@
     (lookup-record [this user-id-uuid _context]
       (lookup-record this user-id-uuid))))
 
+(defn context-fn-catalog
+  "Wrap an arbitrary (fn [uuid context] -> record|nil)."
+  [f]
+  (reify TokenCatalog
+    (lookup-record [this user-id-uuid]
+      (lookup-record this user-id-uuid nil))
+
+    (lookup-record [_ user-id-uuid context]
+      (when (uuid? user-id-uuid) (f user-id-uuid context)))))
+
 (defn composite
   "Try multiple catalogs in order; return the first non-nil record."
   [catalogs]

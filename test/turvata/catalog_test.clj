@@ -49,22 +49,25 @@
       (doseq [bad-input [nil "string-uuid" 123 :keyword [] {}]]
         (is (nil? (cat/lookup-record c bad-input)))))))
 
-;; (deftest context-propagation-test
-;;   (testing "fn-catalog accurately receives the context map"
-;;     (let [c (cat/fn-catalog (fn [tok ctx]
-;;                               (when (= tok "admin-tok")
-;;                                 (:request-ip ctx))))]
-;;       (is (= "192.168.1.1" (cat/lookup-user-id c "admin-tok" {:request-ip "192.168.1.1"})))
-;;       (is (nil? (cat/lookup-user-id c "admin-tok" nil)))))
+(deftest context-fn-catalog-test
+  (testing "context-fn-catalog receives the context map"
+    (let [c (cat/context-fn-catalog
+             (fn [user-id ctx]
+               (when (= user-id uuid-a)
+                 (assoc record-a :request-ip (:request-ip ctx)))))]
+      (is (= (assoc record-a :request-ip "192.168.1.1")
+             (cat/lookup-record c uuid-a {:request-ip "192.168.1.1"})))
+      (is (= (assoc record-a :request-ip nil)
+             (cat/lookup-record c uuid-a)))
+      (is (nil? (cat/lookup-record c "not-a-uuid" {:request-ip "192.168.1.1"})))))
 
-;; (testing "composite catalog correctly propagates the context down to its children"
-;;   (let [c1 (cat/fn-catalog (fn [tok ctx]
-;;                              (when (and (= tok "audit-tok") (:audit? ctx))
-;;                                "auditor")))
-;;         c2 (cat/in-memory-catalog {uuid-a record-a uuid-b record-b}) ; Ignores context, but proves it doesn't crash
-;;         c  (cat/composite [c1 c2])]
-;;     ;; Proves c1 receives the context and acts on it
-;;     (is (= "auditor" (cat/lookup-user-id c "audit-tok" {:audit? true})))
-;;     (is (nil?        (cat/lookup-user-id c "audit-tok" {:audit? false})))
-;;     ;; Proves c2 still works when called via the 2-arity method
-;;     (is (= "user-b"  (cat/lookup-user-id c "b" {:audit? true}))))))
+  (testing "composite catalog propagates context down to context-aware children"
+    (let [c1 (cat/context-fn-catalog
+              (fn [user-id ctx]
+                (when (and (= user-id uuid-a) (:audit? ctx))
+                  record-a)))
+          c2 (cat/in-memory-catalog {uuid-b record-b})
+          c  (cat/composite [c1 c2])]
+      (is (= record-a (cat/lookup-record c uuid-a {:audit? true})))
+      (is (nil?      (cat/lookup-record c uuid-a {:audit? false})))
+      (is (= record-b (cat/lookup-record c uuid-b {:audit? true}))))))
