@@ -69,6 +69,23 @@
                    :settings (settings/normalize ts/test-settings)}]
     (is (nil? (core/authenticate-api-token token!! env {})))))
 
+(deftest authenticate-api-token-skips-catalog-on-prefix-mismatch-test
+  (let [catalog-called? (atom false)
+        token!!         (codec/generate-token!! {:prefix "other-svc"
+                                                 :rotation-version 1
+                                                 :user-id (random-uuid)})
+        catalog         (reify cat/TokenCatalog
+                          (lookup-record [_ _user-id]
+                            (reset! catalog-called? true)
+                            nil)
+                          (lookup-record [_ _user-id _request]
+                            (reset! catalog-called? true)
+                            nil))
+        env             {:catalog catalog
+                         :settings (settings/normalize ts/test-settings)}]
+    (is (nil? (core/authenticate-api-token token!! env {})))
+    (is (false? @catalog-called?))))
+
 (deftest authenticate-api-token-supports-one-arg-fn-catalog-test
   (let [user-id   (random-uuid)
         token!!   (codec/generate-token!! {:prefix "sturdy-test"
