@@ -39,28 +39,31 @@
             spec-version      (Integer/parseInt (subs versions-str 0 2) 16)
             rotation-version  (Integer/parseInt (subs versions-str 2 6) 16)
 
-            payload-bytes     (u/b32->bytes ^String encoded-payload!!)
-
-            ;; exactly 52 bytes
-            raw-data!!        (Arrays/copyOfRange payload-bytes  0 48)
-            expected-checksum (-> (Arrays/copyOfRange payload-bytes 48 52)
-                                  u/bytes->checksum)]
+            payload-bytes     (u/b32->bytes ^String encoded-payload!!)]
 
         (when-not (= 2 spec-version) ;; Enforce V2 explicitly
           (u/throw-400!))
 
-        (u/verify-checksum! raw-data!! expected-checksum)
+        ;; should be precisely 52 bytes
+        (when-not (= 52 (alength ^bytes payload-bytes))
+          (u/throw-400!))
 
-        (let [user-id-bytes (Arrays/copyOfRange raw-data!! 0 16)
-              user-id-uuid  (u/bytes->uuid user-id-bytes)
-              secret!!      (Arrays/copyOfRange raw-data!! 16 48)]
+        (let [raw-data!!        (Arrays/copyOfRange payload-bytes 0 48)
+              expected-checksum (-> (Arrays/copyOfRange payload-bytes 48 52)
+                                    u/bytes->checksum)]
 
-          {:prefix           prefix
-           :spec-version     spec-version
-           :rotation-version rotation-version
-           :user-id          user-id-uuid
-           :secret           secret!!
-           :checksum         expected-checksum})))
+          (u/verify-checksum! raw-data!! expected-checksum)
+
+          (let [user-id-bytes (Arrays/copyOfRange raw-data!! 0 16)
+                user-id-uuid  (u/bytes->uuid user-id-bytes)
+                secret!!      (Arrays/copyOfRange raw-data!! 16 48)]
+
+            {:prefix           prefix
+             :spec-version     spec-version
+             :rotation-version rotation-version
+             :user-id          user-id-uuid
+             :secret           secret!!
+             :checksum         expected-checksum}))))
     (catch Exception _
       (u/throw-400!))))
 

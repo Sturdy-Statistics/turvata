@@ -39,3 +39,13 @@
       (is (thrown? Exception (codec/parse-token!! corrupted)))
       (is (thrown? Exception (codec/parse-token!! "not_enough_parts")))
       (is (thrown? Exception (codec/parse-token!! "prefix_010001_VALIDBASE32BUTWRONGVERSION"))))))
+
+(deftest parsing-rejects-payload-suffix-test
+  (testing "Rejects tokens with extra decoded payload bytes"
+    (let [valid-token (codec/generate-token!! {:prefix "a"
+                                               :rotation-version 1
+                                               :user-id (random-uuid)})
+          parts       (str/split valid-token #"_")
+          payload     (nth parts 2)
+          suffixed    (str (nth parts 0) "_" (nth parts 1) "_" payload "aaaa")]
+      (is (thrown? Exception (codec/parse-token!! suffixed))))))
