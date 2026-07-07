@@ -68,3 +68,16 @@
         env       {:catalog catalog
                    :settings (settings/normalize ts/test-settings)}]
     (is (nil? (core/authenticate-api-token token!! env {})))))
+
+(deftest authenticate-api-token-supports-one-arg-fn-catalog-test
+  (let [user-id   (random-uuid)
+        token!!   (codec/generate-token!! {:prefix "sturdy-test"
+                                           :rotation-version 1
+                                           :user-id user-id})
+        token-map (codec/parse-token!! token!!)
+        db-row    {:hash (crypto/hash-key ts/test-pepper-bytes token-map)
+                   :rotation-version 1}
+        catalog   (cat/fn-catalog #(when (= % user-id) db-row))
+        env       {:catalog catalog
+                   :settings (settings/normalize ts/test-settings)}]
+    (is (= user-id (core/authenticate-api-token token!! env {:request-id "req-1"})))))

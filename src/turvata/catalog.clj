@@ -39,8 +39,8 @@
     (lookup-record [_ user-id-uuid]
       (when (uuid? user-id-uuid) (f user-id-uuid)))
 
-    (lookup-record [_ user-id-uuid context]
-      (when (uuid? user-id-uuid) (f user-id-uuid context)))))
+    (lookup-record [this user-id-uuid _context]
+      (lookup-record this user-id-uuid))))
 
 (defn composite
   "Try multiple catalogs in order; return the first non-nil record."
