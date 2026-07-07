@@ -38,7 +38,7 @@
 
     (.put buffer ^bytes magic!!)
     (.put buffer ^bytes user-id-bytes)
-    (.putShort buffer (short rotation-version))
+    (.putShort buffer (unchecked-short rotation-version))
     (.put buffer secret!!)
 
     (hmac-sha512 pepper!! (.array buffer))))

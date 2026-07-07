@@ -56,6 +56,19 @@
                     :grace-period-expires-at past}]
         (is (false? (core/verify-key pepper tok-map db-row now)))))))
 
+(deftest verify-key-supports-unsigned-16-bit-rotation-versions-test
+  (doseq [rotation-version [32767 32768 65535]]
+    (testing (str "rotation-version " rotation-version)
+      (let [user-id   (random-uuid)
+            token!!   (codec/generate-token!! {:prefix "sturdy-test"
+                                               :rotation-version rotation-version
+                                               :user-id user-id})
+            token-map (codec/parse-token!! token!!)
+            hash!!    (crypto/hash-key ts/test-pepper-bytes token-map)
+            db-row    {:hash hash!! :rotation-version rotation-version}]
+        (is (= :valid/primary
+               (core/verify-key ts/test-pepper-bytes token-map db-row (Instant/now))))))))
+
 (deftest authenticate-api-token-rejects-prefix-mismatch-test
   (let [user-id   (random-uuid)
         token!!   (codec/generate-token!! {:prefix "other-svc"
