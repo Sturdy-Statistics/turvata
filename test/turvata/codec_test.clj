@@ -54,3 +54,28 @@
           payload     (nth parts 2)
           suffixed    (str (nth parts 0) "_" (nth parts 1) "_" payload "aaaa")]
       (is (thrown? Exception (codec/parse-token!! suffixed))))))
+
+(deftest parsing-rejects-version-suffix-test
+  (testing "Rejects version segments longer than the canonical six hex characters"
+    (let [valid-token (codec/generate-token!! {:prefix "a"
+                                               :rotation-version 1
+                                               :user-id (random-uuid)})
+          parts       (str/split valid-token #"_")
+          suffixed    (str (nth parts 0) "_" (nth parts 1) "ff_" (nth parts 2))]
+      (is (thrown? Exception (codec/parse-token!! suffixed))))))
+
+(deftest generation-enforces-rotation-version-bounds-test
+  (testing "Generates and parses the maximum 16-bit rotation version"
+    (let [user-id (random-uuid)
+          token!! (codec/generate-token!! {:prefix "a"
+                                           :rotation-version 65535
+                                           :user-id user-id})
+          parsed  (codec/parse-token!! token!!)]
+      (is (= 65535 (:rotation-version parsed)))
+      (is (= user-id (:user-id parsed)))))
+
+  (testing "Rejects rotation versions too large for the token format"
+    (is (thrown? Exception
+                 (codec/generate-token!! {:prefix "a"
+                                          :rotation-version 65536
+                                          :user-id (random-uuid)})))))

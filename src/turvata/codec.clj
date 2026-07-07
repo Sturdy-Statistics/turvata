@@ -16,6 +16,9 @@
 
 (def ^:private max-token-length 4096)
 
+(defn- valid-rotation-version? [v]
+  (and (nat-int? v) (<= v 0xffff)))
+
 (defn- nonce
   ^bytes [^long length]
   (let [iv (byte-array length)]
@@ -30,7 +33,7 @@
     (when-not (<= (count raw-token!!) max-token-length)
       (u/throw-400!))
 
-    (when-not (re-matches #"^[a-zA-Z0-9\-]+_[0-9a-fA-F]+_[a-zA-Z2-7]+$" raw-token!!)
+    (when-not (re-matches #"^[a-zA-Z0-9\-]+_[0-9a-fA-F]{6}_[a-zA-Z2-7]+$" raw-token!!)
       (u/throw-400!))
 
     (let [normalized-token  (str/lower-case raw-token!!)
@@ -95,6 +98,6 @@
         payload!!         (u/bytes->b32 payload-bytes!!)
 
         ;; V2 explicitly hardcoded
-        versions-str      (format "%02x%04x" 2 (have nat-int? rotation-version))]
+        versions-str      (format "%02x%04x" 2 (have valid-rotation-version? rotation-version))]
 
     (str prefix "_" versions-str "_" payload!!)))
