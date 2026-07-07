@@ -23,7 +23,7 @@
   [:and integer? [:fn {:error/message "must be non-negative"} (complement neg?)]])
 
 (def PosInteger
-  [:and integer? [:fn {:error/message "must be non-negative"} pos?]])
+  [:and integer? [:fn {:error/message "must be positive"} pos?]])
 
 (def RelativeURI
   [:fn {:error/message "must be a relative URI starting with '/'"} relative-uri?])

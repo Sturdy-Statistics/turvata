@@ -41,8 +41,7 @@
 
 (defn normalize
   "Merge user settings with sane defaults and validate.
-   Guarantees all required V2 cryptographic parameters are present.
-   Converts the pepper string into a UTF-8 byte array for the crypto engine."
+   Guarantees all required V2 cryptographic parameters are present."
   [settings-in]
   (schema/assert-valid! schema/SettingsIn settings-in)
 
