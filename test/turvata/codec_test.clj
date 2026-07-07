@@ -40,6 +40,11 @@
       (is (thrown? Exception (codec/parse-token!! "not_enough_parts")))
       (is (thrown? Exception (codec/parse-token!! "prefix_010001_VALIDBASE32BUTWRONGVERSION"))))))
 
+(deftest parsing-rejects-oversized-token-test
+  (testing "Rejects oversized token strings before payload parsing"
+    (let [oversized-token (str "prefix_020001_" (apply str (repeat 5000 "a")))]
+      (is (thrown? Exception (codec/parse-token!! oversized-token))))))
+
 (deftest parsing-rejects-payload-suffix-test
   (testing "Rejects tokens with extra decoded payload bytes"
     (let [valid-token (codec/generate-token!! {:prefix "a"

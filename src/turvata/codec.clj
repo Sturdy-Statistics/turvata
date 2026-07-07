@@ -14,6 +14,8 @@
   ^SecureRandom secure-random
   (SecureRandom.))
 
+(def ^:private max-token-length 4096)
+
 (defn- nonce
   ^bytes [^long length]
   (let [iv (byte-array length)]
@@ -25,6 +27,9 @@
    Fails fast on checksum mismatch or structural invalidity."
   [raw-token!!]
   (try
+    (when-not (<= (count raw-token!!) max-token-length)
+      (u/throw-400!))
+
     (when-not (re-matches #"^[a-zA-Z0-9\-]+_[0-9a-fA-F]+_[a-zA-Z2-7]+$" raw-token!!)
       (u/throw-400!))
 
