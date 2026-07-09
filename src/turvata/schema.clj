@@ -2,7 +2,7 @@
   (:require
    [clojure.string :as string]
    [sturdy.malli-firewall.core :as f]
-   [sturdy.malli-firewall.schemas :refer [RelativeURI]]))
+   [sturdy.malli-firewall.schemas :as fs]))
 
 (set! *warn-on-reflection* true)
 
@@ -27,6 +27,8 @@
   [:and bytes?
    [:fn {:error/message "must be at least 32 bytes for sufficient HMAC-SHA512 entropy"}
     #(>= (alength ^bytes %) 32)]])
+
+(def RelativeURI fs/RelativeURI)
 
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Schema
