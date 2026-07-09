@@ -1,20 +1,13 @@
 (ns turvata.schema
   (:require
    [clojure.string :as string]
-   [sturdy.malli-firewall.core :as f]))
+   [sturdy.malli-firewall.core :as f]
+   [sturdy.malli-firewall.schemas :refer [RelativeURI]]))
 
 (set! *warn-on-reflection* true)
 
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Utilities
-
-(defn relative-uri?
-  [s]
-  (and
-   (string? s)
-   (seq s)
-   (string/starts-with? s "/")
-   (not (string/starts-with? s "//"))))
 
 (def NonBlankString
   [:and string? [:fn {:error/message "must not be blank"} (complement string/blank?)]])
@@ -24,9 +17,6 @@
 
 (def PosInteger
   [:and integer? [:fn {:error/message "must be positive"} pos?]])
-
-(def RelativeURI
-  [:fn {:error/message "must be a relative URI starting with '/'"} relative-uri?])
 
 (def TokenPrefix
   [:and string?
