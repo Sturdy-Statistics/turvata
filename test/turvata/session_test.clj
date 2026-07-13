@@ -95,6 +95,21 @@
             ;; refreshed expiry should be recomputed from "now"
             (is (= (+ now ttl) (:expires-at out)))))))))
 
+(deftest authenticate-browser-token-refresh-after-delete-test
+  (let [base  1000000
+        ttl   60000
+        store (reify s/SessionStore
+                (get-entry [_ _token]
+                  {:user-id "alice" :expires-at (+ base (quot ttl 2))})
+                (put-entry! [_ _token entry] entry)
+                (delete-entry! [_ _token] nil)
+                (prune-expired! [_ _now-ms] 0)
+                ;; Simulates logout deleting the session after get-entry.
+                (touch! [_ _token _new-expires-at] nil))
+        env   {:store store :settings {:session-ttl-ms ttl}}]
+    (with-redefs [s/now-ms (constantly base)]
+      (is (nil? (s/authenticate-browser-token env "deleted-during-refresh"))))))
+
 (deftest authenticate-browser-token-edge-cases-test
   (let [store (s/in-memory-store)
         env   {:store store :settings {:session-ttl-ms 60000}}]

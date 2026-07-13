@@ -66,11 +66,11 @@
           (if (pos? ttl)
             (if (<= remaining (quot ttl 2))
               ;; refresh
-              (let [new-exp (+ now ttl)
-                    touched (touch! store token!! new-exp)]
-                {:user-id user-id
-                 :expires-at (have integer? (:expires-at touched)) ; read back what store wrote
-                 :refreshed? true})
+              (let [new-exp (+ now ttl)]
+                (when-let [touched (touch! store token!! new-exp)]
+                  {:user-id user-id
+                   :expires-at (have integer? (:expires-at touched)) ; read back what store wrote
+                   :refreshed? true}))
               ;; no refresh
               {:user-id user-id
                :expires-at expires-at
