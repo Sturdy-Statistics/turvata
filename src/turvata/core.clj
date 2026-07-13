@@ -5,6 +5,7 @@
    [turvata.crypto :as crypto]
    [turvata.catalog :as cat])
   (:import
+   (clojure.lang ExceptionInfo)
    (java.time Instant)))
 
 (set! *warn-on-reflection* true)
@@ -44,19 +45,26 @@
       grace-match?   :valid/grace
       :else          false)))
 
+(defn- parse-token-or-nil
+  [raw-token!!]
+  (try
+    (codec/parse-token!! raw-token!!)
+    (catch ExceptionInfo e
+      ;; auth errors throw 400
+      (if (= 400 (:status (ex-data e)))
+        nil
+        ;; code bug, catalog outage, etc.  throw -> 500 from error MW
+        (throw e)))))
+
 (defn authenticate-api-token
   "returns user-id or nil"
   [raw-token!! env request]
-  (try
-    (let [token-map (codec/parse-token!! raw-token!!)
-          prefix    (some-> (get-in env [:settings :prefix]) string/lower-case)
-          user-id   (:user-id token-map)]
+  (when-let [token-map (parse-token-or-nil raw-token!!)]
+    (let [prefix  (some-> (get-in env [:settings :prefix]) string/lower-case)
+          user-id (:user-id token-map)]
       (when (= prefix (:prefix token-map))
         (let [db-row (cat/lookup-record (:catalog env) user-id request)
               pepper (get-in env [:settings :pepper])
               now    (Instant/now)]
           (when (and db-row (verify-key pepper token-map db-row now))
-            user-id))))
-    (catch Exception _
-      ;; Catches malformed strings, bad checksums, or bad versions
-      nil)))
+            user-id))))))

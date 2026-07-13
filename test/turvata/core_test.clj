@@ -111,3 +111,26 @@
         env       {:catalog catalog
                    :settings (settings/normalize ts/test-settings)}]
     (is (= user-id (core/authenticate-api-token token!! env {:request-id "req-1"})))))
+
+(deftest authenticate-api-token-error-classification-test
+  (let [user-id   (random-uuid)
+        token!!   (codec/generate-token!! {:prefix "sturdy-test"
+                                           :rotation-version 1
+                                           :user-id user-id})
+        settings  (settings/normalize ts/test-settings)]
+    (testing "malformed credentials are ordinary authentication failures"
+      (is (nil? (core/authenticate-api-token "malformed" {:settings settings} {}))))
+
+    (testing "catalog failures propagate to the application's error boundary"
+      (let [catalog (cat/context-fn-catalog
+                     (fn [_user-id _request]
+                       (throw (ex-info "catalog unavailable" {:component :catalog}))))]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"catalog unavailable"
+                              (core/authenticate-api-token
+                               token!! {:catalog catalog :settings settings} {})))))
+
+    (testing "malformed catalog rows propagate instead of becoming invalid credentials"
+      (let [catalog (cat/in-memory-catalog {user-id {:hash (byte-array 64)}})]
+        (is (thrown? Exception
+                     (core/authenticate-api-token
+                      token!! {:catalog catalog :settings settings} {})))))))
