@@ -106,6 +106,11 @@ Provided implementations:
 (cat/composite [catalog-a catalog-b])
 ```
 
+`edn-file-catalog` is a convenience for prototyping and small, trusted deployments.
+It reads and parses the entire file on every lookup and expects a small, trusted, correctly shaped EDN catalog.
+Malformed files and records raise operational errors.
+For production or larger catalogs, implement `TokenCatalog` using an appropriate database or other production storage.
+
 ### Session store
 
 Browser sessions are ephemeral, stateful, and stored server-side via a `SessionStore`.

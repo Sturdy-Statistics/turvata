@@ -64,10 +64,13 @@
         (some #(lookup-record % user-id-uuid context) catalogs')))))
 
 (defn edn-file-catalog
-  "EDN-backed catalog.
+  "EDN-backed catalog for prototyping and small, trusted deployments.
    File format: [{:user-id #uuid \"...\" :hash-hex \"...\" :rotation-version 1 ...} ...]
-   Note: reloads the file on each call; intended for low traffic endpoints.
-   Automatically converts hex strings to byte arrays for the crypto engine."
+   Reads and parses the entire file on every lookup, so it is intended only for
+   low-traffic endpoints with a small, trusted, correctly shaped catalog.
+   Automatically converts hex strings to byte arrays for the crypto engine.
+   Use a custom TokenCatalog backed by production storage for larger or
+   untrusted catalogs."
   [path]
   (reify TokenCatalog
     (lookup-record [_ user-id-uuid]
