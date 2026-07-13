@@ -100,6 +100,24 @@
     (is (= 400 (:status resp)) "Should block external redirects")
     (is (get-in resp [:body :details :next]) "Should report error for the 'next' field")))
 
+(deftest login-blocks-backslash-redirects
+  (let [handler (h/make-login-handler (make-env))]
+    (doseq [next ["/\\evil.example"
+                  "/\\/evil.example"
+                  "/path\\segment"
+                  "/%5cevil.example"
+                  "/%5Cevil.example"
+                  "/%5c/evil.example"
+                  "/path%5Csegment"]]
+      (let [req  (-> (mock/request :post "/auth/login")
+                     (assoc :params {"user-id" (str test-uuid)
+                                     "token"   test-token-str
+                                     "next"    next}))
+            resp (handler req)]
+        (is (= 400 (:status resp)) (str "Should block redirect: " next))
+        (is (get-in resp [:body :details :next])
+            (str "Should report an error for redirect: " next))))))
+
 (deftest login-security-no-keyword-leak
   (let [env      (make-env)
         app      (-> (h/make-login-handler env) wrap-params)

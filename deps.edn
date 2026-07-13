@@ -1,9 +1,9 @@
 {:paths ["src"]
  :deps  {ring/ring-core                    {:mvn/version "1.12.2"}
          com.taoensso/truss                {:mvn/version "2.2.0"}
-         com.sturdystats/sturdy-fs         {:mvn/version "0.1.8"}
-         com.sturdystats/malli-firewall    {:mvn/version "0.2.2"}
-         com.sturdystats/sturdy-middleware {:mvn/version "0.1.7"}}
+         com.sturdystats/sturdy-fs         {:mvn/version "0.1.10"}
+         com.sturdystats/malli-firewall    {:mvn/version "0.2.3"}
+         com.sturdystats/sturdy-middleware {:mvn/version "0.1.8"}}
 
  :aliases {:test
            {:extra-paths ["test" "test-resources"]
