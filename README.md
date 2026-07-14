@@ -21,6 +21,10 @@ It is published as open source to support transparency, auditability, and reuse,
 We may not accept feature requests that dilute its focus.
 
 > [!WARNING]
+> **NOTE** v0.4.0 represents a breaking change from v0.3.x.
+> `SessionStore` now requires `delete-user-entries!`, which removes all sessions currently stored for a user and returns the number removed.
+> Custom `SessionStore` implementations must implement the new protocol method.
+>
 > **NOTE** v0.3.0 represents a severe breaking change from v0.2.x.
 > `turvata` abandoned simple SHA-256 token hashes in favor of cryptographically bound HMAC-SHA512 tokens with structural context. All `user-id`s must now be `java.util.UUID`. V1 tokens are no longer supported.
 >
