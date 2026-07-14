@@ -124,6 +124,10 @@ Provided implementation:
 (sess/in-memory-store)
 ```
 
+Revoke all sessions currently stored for a user with `(sess/delete-user-entries! store user-id)`.
+The operation returns the number of sessions removed.
+Custom `SessionStore` implementations must provide the same point-in-time revocation semantics.
+
 ## Environment configuration
 
 `turvata` uses a functional, closure-based architecture to avoid hidden global state. 

@@ -10,6 +10,8 @@
   (get-entry [this token])                ;; -> {:user-id ... :expires-at ...} | nil
   (put-entry! [this token entry])         ;; -> added entry
   (delete-entry! [this token])            ;; -> deleted entry
+  (delete-user-entries! [this user-id]
+    "Deletes all sessions currently stored for user-id and returns the number removed.")
   (prune-expired! [this now-ms])          ;; -> number of deleted sessions
   (touch! [this token new-expires-at]))   ;; -> updated entry | nil
 
@@ -26,6 +28,16 @@
       (delete-entry! [_ token]
         (let [[old _new] (swap-vals! a dissoc token)]
           (get old token)))
+
+      (delete-user-entries! [_ user-id]
+        (let [keep-other-users
+              (fn [old]
+                (into {}
+                      (remove (fn [[_token entry]]
+                                (= user-id (:user-id entry))))
+                      old))
+              [old new] (swap-vals! a keep-other-users)]
+          (- (count old) (count new))))
 
       (prune-expired! [_ now-ms]
         (let [now   (long now-ms)

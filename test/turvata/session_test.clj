@@ -36,6 +36,32 @@
     (is (= {:user-id "bob" :expires-at (+ t0 5000)} (s/delete-entry! store tok)))
     (is (nil? (s/touch! store tok (+ t0 9000))))))
 
+(deftest delete-user-entries-test
+  (let [store       (s/in-memory-store)
+        target-user (random-uuid)
+        other-user  (random-uuid)
+        expires-at  (+ (s/now-ms) 60000)]
+    (s/put-entry! store "target-1" {:user-id target-user :expires-at expires-at})
+    (s/put-entry! store "target-2" {:user-id target-user :expires-at expires-at})
+    (s/put-entry! store "other" {:user-id other-user :expires-at expires-at})
+
+    (testing "removes every session for the target user"
+      (is (= 2 (s/delete-user-entries! store target-user)))
+      (is (nil? (s/get-entry store "target-1")))
+      (is (nil? (s/get-entry store "target-2"))))
+
+    (testing "preserves sessions for other users"
+      (is (= {:user-id other-user :expires-at expires-at}
+             (s/get-entry store "other"))))
+
+    (testing "repeated revocation is idempotent"
+      (is (zero? (s/delete-user-entries! store target-user))))
+
+    (testing "revoking an unknown user changes nothing"
+      (is (zero? (s/delete-user-entries! store (random-uuid))))
+      (is (= {:user-id other-user :expires-at expires-at}
+             (s/get-entry store "other"))))))
+
 (deftest prune-expired-basic-test
   (let [store (s/in-memory-store)
         base  (s/now-ms)
@@ -103,6 +129,7 @@
                   {:user-id "alice" :expires-at (+ base (quot ttl 2))})
                 (put-entry! [_ _token entry] entry)
                 (delete-entry! [_ _token] nil)
+                (delete-user-entries! [_ _user-id] 0)
                 (prune-expired! [_ _now-ms] 0)
                 ;; Simulates logout deleting the session after get-entry.
                 (touch! [_ _token _new-expires-at] nil))
